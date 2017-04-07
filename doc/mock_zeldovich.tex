@@ -1,0 +1,148 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+%\usepackage{fancyhdr}
+\usepackage{hyperref}
+
+% Use Times fonts
+\usepackage{mathptmx}
+\usepackage[scaled]{helvet}
+\renewcommand{\ttdefault}{pcr}
+\usepackage{bm}
+
+\setlength{\oddsidemargin}{0pt}   %%% left margin
+\setlength{\textwidth}{159.2mm}
+\setlength{\topmargin}{0mm}
+\setlength{\headheight}{10mm}
+\setlength{\headsep}{10mm}         %%% length between header and test
+\setlength{\textheight}{219.2mm}
+
+\setlength{\parindent}{0pt}
+
+%\pagestyle{fancy}
+%\renewcommand{\headrulewidth}{0pt}
+%\fancyhf{}
+%\rhead{JK 0000 - \thepage}
+%\rfoot{\url{http://www.github.com/junkoda/mock_zeldovich}}
+
+\begin{document}
+
+\section{Analytical Theory}
+
+The Zeldovich approximation is the first-order solution to the
+Lagrangian pertubation theory, which relates the unperturbed
+Lagrangian coordinate $\bm{q}$ to the pertubed Eularian position
+$\bm{x}$,
+\begin{equation}
+  \bm{x} = \bm{q} + \bm{\Psi}(\bm{q})
+\end{equation}
+
+The displacement in redshift space is only difference by a constant factor,
+\begin{equation}
+  \bm{s} = \bm{x} + \frac{1}{aH(a)} v_z \bm{e}_z
+         = \bm{q} + \bm{\Psi}^s(\bm{q}),
+\end{equation}
+where we assume that the line of sight is in the $z$ direction.
+
+\begin{align}
+  \begin{cases}
+  \Psi_i^s &= \Psi_i \mbox{  for $i=1,2$}\\
+  \Psi_3^s &= \Psi_3
+  \end{cases}m
+\end{align}
+
+The Zeldovich appromation to the displacement vector $\Psi$ is,
+\begin{equation}
+  \delta(\bm{x}) = - \bm{\nabla}_q \cdot \bm{\Psi}(\bm{q})
+\end{equation}
+where $\delta$ is the density contrast $\delta = n(\bm{x}/\langle n
+\rangle - 1$ for some density field n; the angle braket denotes the
+ensamble average. The vorticity is a decaying mode and often set to zero,
+\begin{equation}
+  \bm{\nabla}_q \times \bm{\Psi}(\bm{q}) = 0.
+\end{equation}
+
+\begin{equation}
+  \delta(\bm{k}) = \int d^3 q \, e^{-i \bm{k} \cdot \bm{q}}
+                                 e^{-i \bm{k} \cdot \bm{\Psi}(\bm{q})}
+\end{equation}
+
+The power spectrum, defined by,
+\begin{equation}
+  \left\langle \delta(\bm{k}) \delta(\bm{k}') \right\rangle
+  = (2\pi)^3 \delta_D(\bm{k} - \bm{k}') P(\bm{k}),
+\end{equation}
+is
+\begin{equation}
+  P(\bm{k}) = \int d^3 r \,  e^{-i \bm{k} \cdot \bm{r}} \left \langle
+  e^{-i \bm{k} \cdot \left[ \bm{\Psi}(\bm{p}) - \bm{\Psi}(\bm{q}) \right]} \right \rangle,
+\end{equation}
+where $\bm{r} \equiv \bm{p} - \bm{q}$.
+
+The ensamble average can be computed with the charactersic function formula
+for a random Gaussian variable $X$ with $\langle X \rangle = 0$,
+\begin{equation}
+  \left\langle e^{-t X} \right\rangle = e^{-\frac{1}{2} \sigma^2 t^2},
+\end{equation}
+where $\sigma^2 = \left\langle X^2 \right\rangle$.
+
+\begin{equation}
+  P(\bm{k}) = \int d^3 r \, e^{-i \bm{k} \cdot \bm{r}}
+    e^{-\frac{1}{2} \Sigma(\bm{k}, \bm{r})},
+\end{equation}
+where $\Sigma(\bm{k}, \bm{r})$ is the variance of $\bm{k} \cdot \left[
+  \bm{\Psi}(\bm{p}) - \bm{\Psi}(q) \right]$:
+
+\begin{equation}
+  \Sigma(\bm{k}, \bm{r}) = 2 \sum_i k_i^2 \left[ \sigma_i^2 - \xi_{ii}(\bm{r}) \right],
+\end{equation}
+where
+\begin{align}
+  \sigma^2_i       &= \left\langle \Psi_i^2 \right\rangle,\\
+  \xi_{ij}(\bm{r}) &= \left\langle \Psi_i(\bm{p}) \Psi_j(\bm{q}) \right\rangle
+                   = \delta_{ij} \left\langle \Psi_i(\bm{p}) \Psi_j(\bm{q}) \right\rangle,
+\end{align}
+and $\delta_{ij}$ is the Kronecker delta.
+
+The Zeldovich displacement field in Fourier space is,
+\begin{equation}
+  \bm{\Psi}(\bm{k}) = \frac{i\bm{k}}{k^2} \delta(\bm{k}).
+\end{equation}
+
+
+
+\begin{equation}
+  \xi_{ij}(\bm{r}) = \int \frac{d^3 k}{(2\pi)^3}\,
+                    e^{i\bm{k} \cdot \bm{r}} \frac{k_i}{k} \frac{k_j}{k}
+                    \frac{P(\bm{k})}{k^2}
+\end{equation}
+
+The off-diagonal terms are zero from the asymmetry across the axies
+and the diagonal term can be computed with Legendre polynomials,
+
+\begin{align}
+  \mathcal{P}_0(\mu) = 1\\
+  \mathcal{P}_2(\mu) = \frac{1}{2} \left( 3 \mu^2 - 1 \right)
+\end{align}
+
+\begin{equation}
+  \int \mathcal{P}_m(\mu) \mathcal{P}_n(\mu) d\mu =
+     \frac{2}{2 n + 1} \delta_{\ell n}
+\end{equation}
+
+\begin{equation}
+  \xi_{22}(\bm{r}) = \frac{1}{3} \int \frac{d^3 k}{(2\pi)^3} \,
+             \left[ 2 \mathcal{P}_2(\mu) + \mathcal{P}_0 \right] P(\bm{k})/k^2
+             = \frac{2}{3}  \xi_2(k) - \frac{1}{3} \xi_2(0)
+\end{equation}
+where $\xi_\ell$ is the multipoles of the displacement correlation function
+
+\section{Discrete Theory}
+
+
+\label{LastPage}
+\end{document}
+
+%
+% 
+%
