@@ -9,9 +9,16 @@
 void lpt_init(const int nc, const double boxsize, Mem* mem);
 void lpt_free();
 
+/*
 void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
 			   const double a, Particles* particles);
 FFT* lpt_generate_phi(const unsigned long seed, PowerSpectrum* const);
 void lpt_set_offset(Float offset_);
+*/
+
+void lpt_generate_psi_x(const unsigned long seed,
+			complex_t const * const Pk,
+			const bool fix_amplitude);
+
 
 #endif
