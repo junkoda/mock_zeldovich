@@ -266,7 +266,7 @@ void lpt_generate_psi_x(const unsigned long seed,
 }
 
 
-void lpt_zeldovich_displacement(vector<Particle>& v, const Float a)
+void lpt_zeldovich_displacement_cic(vector<Particle>& v, const Float a)
 {
   // Prerequisite:
   //     Psi(x) in fft_psi computed by lpt_generate_psi_x
@@ -333,7 +333,60 @@ void lpt_zeldovich_displacement(vector<Particle>& v, const Float a)
   sum2 /= (3.0*n);
   double f= cosmology_f_growth_rate(a);
   
-  msg_printf(msg_verbose, "Zeldovich displacements calculated.\n");
+  msg_printf(msg_verbose, "Zeldovich displacements CIC calculated.\n");
+  msg_printf(msg_info, "scale_factor  a = %.15e\n", a);
+  msg_printf(msg_info, "growth_factor D = %.15e\n", D1);
+  msg_printf(msg_info, "goroth_rate   f = %.15e\n", f);
+  msg_printf(msg_info, "displacement 1D rms %e\n", D1*sqrt(sum2));
+  msg_printf(msg_info, "velocity 1D rms %e\n", Dv*sqrt(sum2));
+}
+
+void lpt_zeldovich_displacement_ngp(vector<Particle>& v, const Float a)
+{
+  // Prerequisite:
+  //     Psi(x) in fft_psi computed by lpt_generate_psi_x
+  // Input:
+  //     Particles in unperturbed location q
+  // Output:
+  //     Particle positions and velocities purturbed by Zeldovich approximation
+  //     x = q + Psi(x)
+  //     v = Dv*Psi(x)
+
+  assert(comm_n_nodes() == 1); // Not MPIzed
+  Float* psi[]=  {fft_psi[0]->fx, fft_psi[1]->fx, fft_psi[2]->fx};
+
+  const Float dx_inv= nc/boxsize;
+  uint64_t id= (uint64_t) local_ix0*nc*nc + 1;
+
+  const Float D1= cosmology_D_growth(a);
+  const Float Dv= cosmology_Dv_growth(a, D1);
+
+  long double sum2= 0.0;
+
+  const size_t n= v.size();
+  
+  for(Particle& p : v) {
+    int ix[3];
+
+    for(int k=0; k<3; ++k)
+      ix[k]= (int) (p.x[k]*dx_inv);
+
+    // This is not MPIzed, Psi can be in other MPI node
+    for(int k=0; k<3; ++k) {
+      Float dis= psi[k][i_x(ix[0], ix[1], ix[2])];
+
+      p.x[k] += D1*dis;
+      p.v[k]  = Dv*dis;
+
+      sum2 += dis*dis;
+    }
+    p.id= id++;
+  }
+
+  sum2 /= (3.0*n);
+  double f= cosmology_f_growth_rate(a);
+  
+  msg_printf(msg_verbose, "Zeldovich displacements NGP calculated.\n");
   msg_printf(msg_info, "scale_factor  a = %.15e\n", a);
   msg_printf(msg_info, "growth_factor D = %.15e\n", D1);
   msg_printf(msg_info, "goroth_rate   f = %.15e\n", f);

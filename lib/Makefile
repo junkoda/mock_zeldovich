@@ -23,21 +23,9 @@ lib: $(LIB)
 
 # CXX is defined in ../Makefile
 
-WOPT    ?= -Wall
-CPPFLAGS  := -O3 -std=c++11 $(WOPT) $(OPENMP) $(OPT)
-LIBS    := -lm -lhdf5
-
-# Define paths of FFTW3 & GSL libraries if necessary.
-
-FFTW3_DIR ?= #e.g. /Users/jkoda/Research/opt/gcc/fftw3
-GSL_DIR   ?= #e.g. /Users/jkoda/Research/opt/gcc/gsl
-HDF5P_DIR ?= # parallel HDF5 library; e.g., brew install hdf5 --with-mpi
-
-DIR_PATH   = $(FFTW3_DIR) $(GSL_DIR) $(HDF5P_DIR)
-
-CPPFLAGS  += $(foreach dir, $(DIR_PATH), -I$(dir)/include)
-LIBS      += $(foreach dir, $(DIR_PATH), -L$(dir)/lib)
-
+WOPT     ?= -Wall
+CPPFLAGS += -O3 $(INCLS) $(WOPT) $(OPENMP) $(OPT)
+#LIBS     += -lm #-lhdf5
 
 OBJS := comm.o msg.o config.o fft.o mem.o particle.o util.o
 OBJS += power.o cosmology.o lpt.o 
@@ -46,21 +34,6 @@ OBJS += power.o cosmology.o lpt.o
 
 
 
-#
-# Linking libraries
-#
-LIBS += -lgsl -lgslcblas
-
-ifeq (,$(findstring -DDOUBLEPRECISION, $(OPT)))
-  # Single precision FFTW
-  FFTWSUF=f
-endif
-LIBS += -lfftw3$(FFTWSUF) -lfftw3$(FFTWSUF)_mpi
-
-ifdef OPENMP
-  LIBS += -lfftw3$(FFTWSUF)_omp
-  #LIBS += -lfftw3$(FFTWSUF)_threads # for thread parallelization instead of omp
-endif
 
 #
 # Library libfs
@@ -70,7 +43,7 @@ libfs.a: $(OBJS)
 
 libfs.dylib: $(OBJS)
 	echo $(OPT)
-	$(CXX) -dynamiclib $(LIBS) $(OBJS) -o $@
+	$(CXX) -dynamiclib $(OBJS) -o $@
 
 
 #

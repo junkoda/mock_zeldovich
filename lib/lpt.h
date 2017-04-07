@@ -1,6 +1,7 @@
 #ifndef LPT_H
 #define LPT_H 1
 
+#include <vector>
 #include "mem.h"
 #include "particle.h"
 #include "power.h"
@@ -17,8 +18,10 @@ void lpt_set_offset(Float offset_);
 */
 
 void lpt_generate_psi_x(const unsigned long seed,
-			complex_t const * const Pk,
+			double const * const Pk,
 			const bool fix_amplitude);
 
+void lpt_zeldovich_displacement_ngp(std::vector<Particle>& v, const Float a);
+void lpt_zeldovich_displacement_cic(std::vector<Particle>& v, const Float a);
 
 #endif
