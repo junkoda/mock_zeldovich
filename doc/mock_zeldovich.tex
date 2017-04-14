@@ -6,7 +6,7 @@
 \usepackage{hyperref}
 
 % Use Times fonts
-\usepackage{mathptmx}
+%\usepackage{mathptmx}
 \usepackage[scaled]{helvet}
 \renewcommand{\ttdefault}{pcr}
 \usepackage{bm}
@@ -225,23 +225,35 @@ Linear limit:
 \section{Formulae}
 
 \begin{formula}
-  Plane wave expansion
+  Plane wave expansion:
   \begin{equation}
-    \exp^{i\bm{k} \cdot \bm{r}} = \sum_{\ell=0}^\infty (2 \ell + 1) i^\ell j_\ell(kr) \mathcal{P}_\ell (\cos \theta),
+    e^{i\bm{k} \cdot \bm{r}} = \sum_{\ell=0}^\infty (2 \ell + 1) i^\ell j_\ell(kr) \mathcal{P}_\ell (\cos \theta),
   \end{equation}
 where $\bm{k} \cdot \bm{r} = k r \cos\theta$.
 \end{formula}
 
+$j_\ell$ is a spherical Bessel function,
+\begin{align}
+  j_0(z) &= \frac{\sin z}{z}\\
+  j_2(z) &= \left( \frac{3}{z^3} - \frac{1}{z} \right) \sin z
+            - \frac{3}{z^2} \cos z
+\end{align}
+and $\mathcal{P}_\ell$ is a Legendre polynomial,
+\begin{align}
+  \mathcal{P}_0(x) &= 1\\
+  \mathcal{P}_2(x) &= \frac{1}{2} (3 x^2 - 1)
+\end{align}
+
 \begin{formula}
-  Orthogonality of Legendre polynomials
+  Orthogonality of Legendre polynomials:
   \begin{equation}
     \int \mathcal{P}_m(\mu) \mathcal{P}_n(\mu) d\mu =
-    \frac{2}{2 n + 1} \delta_{\ell n}
+    \frac{2}{2 n + 1} \delta_{\ell n}.
   \end{equation}
 \end{formula}
 
 \begin{formula}
-  Orthogonality of spherical Bessel functions
+  Orthogonality of spherical Bessel functions:
   \begin{equation}
     \int \! r^2 dr j_\ell(kr) j_\ell(k'r)
     = \frac{\pi}{2k^2} \delta_D(k - k').
@@ -277,21 +289,21 @@ where $\bm{k} \cdot \bm{r} = k r \cos\theta$.
 
 \begin{proof}
   The integral must be a linear combination of $\delta_{ij}$ and
-  $\hat{r}_i \hat{r}_j$ due to its tensor structure. Let coefficient
-  of the linear cobination be $A$ and $B$:
+  $\hat{r}_i \hat{r}_j$ due to its tensor structure. Let the coefficients
+  be $A$ and $B$,
 
   \begin{equation}
     \int\! d\Omega_k \, \hat{k}_i \hat{k}_j \exp^{i\bm{k}\cdot\bm{r}}
-    = A \delta_{ij} + B \hat{r}_i \hat{r}_j
+    = A \delta_{ij} + B \hat{r}_i \hat{r}_j.
   \end{equation}
 
-  Similarly, $\sum_{ij} \delta_{ij}$ on both sides gives,
+   $\sum_{ij} \delta_{ij}$ on both sides gives,
   \begin{equation}
     \int \! d\Omega_k \exp^{i\bm{k}\cdot\bm{r}} = 4 \pi j_0(kr)
     = 3 A + B.
   \end{equation}
 
-  $\sum_{ij} \hat{r}_i \hat{r}_j$ on both sides gives,
+   Similarly, $\sum_{ij} \hat{r}_i \hat{r}_j$ on both sides gives,
   \begin{equation}
     \int \! d\Omega_k \cos^2 \theta \exp^{i\bm{k}\cdot\bm{r}}
       = A + B,
@@ -330,7 +342,7 @@ where $\bm{k} \cdot \bm{r} = k r \cos\theta$.
       \langle \Psi_i(\bm{p}) \Psi_j(\bm{q}) \rangle &=
       \int \! \frac{d^3 k}{(2\pi)^3} \,
         \hat{k}_i \hat{k}_j \frac{P(k)}{k^2} e^{i\bm{k}\cdot\bm{r}}\\
-      &= \frac{1}{2\pi^2} \int\! k^2 dk \, P(k) \left[
+      &= \frac{1}{2\pi^2} \int\! dk \, P(k) \left[
          \frac{1}{3} j_0(kr) - \left( \hat{r}_i \hat{r}_j - \frac{1}{3}\delta_{ij} \right) j_2(kr) \right],
     \end{split}
   \end{equation}
@@ -338,14 +350,16 @@ where $\bm{k} \cdot \bm{r} = k r \cos\theta$.
 \end{proof}
 
 \begin{formula}
+  \label{formula:inverse-bessel}
   The inverse of spherical Bessel transform
   \begin{equation}
-    \frac{P(k)}{k^2} = \int 4\pi r^2 dr j_n(kr) \Psi_n(r)
+    \frac{P(k)}{k^2} = \int 4\pi r^2 dr j_n(kr) \Psi_n(r).
   \end{equation}
 \end{formula}
 
+The power spectrum of Zeldovich approximation:
 \begin{equation}
-  P(k) = \int \! d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
+  P_Z(k) = \int \! d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
                           \left[ e^{-\frac{1}{2} \Sigma(\bm{k}, \bm{r})} - 1 \right]
 \end{equation}
 
@@ -366,14 +380,25 @@ where $\bm{k} \cdot \bm{r} = k r \cos\theta$.
 Linear limit
 
 \begin{align}
-  P(k) &\approx - \int \! d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
+  P_Z(k) &\approx - \int \! d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
            \frac{1}{2}\Sigma(\bm{k}, \bm{q})\\
-           &= \int\!d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
-           k^2 \left[ \frac{1}{3} \Psi_0(r) - \sigma_v^2
-                 - \frac{2}{3} \mathcal{P}_2(\cos\theta) \Psi_2(r) \right]
+           &= k^2 \int\!d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
+               \left[ \frac{1}{3} \Psi_0(r) - \sigma_v^2
+                 - \frac{2}{3} \mathcal{P}_2(\cos\theta) \Psi_2(r) \right]\\
+               &= 4\pi k^2 \int\! r^2 d r \,
+               \left[ \frac{1}{3} \Psi_0(r) j_0(kr)
+                      + \frac{2}{3} \Psi_2(r) j_2(kr) \right],
 \end{align}
+where the constant term is zero,
+\begin{equation}
+  k^2 \sigma_v^2 \int \! d^3 r \, e^{-i\bm{k}\cdot\bm{r}} 
+  =  k^2 \sigma_v^2 \delta_D(\bm{k}) = 0.
+\end{equation}
 
+The inverse formula (\ref{formula:inverse-bessel}) recovers the linear
+power spectrum $P_Z(k) \approx P(k)$.
 
+  
 
 \label{LastPage}
 \end{document}
