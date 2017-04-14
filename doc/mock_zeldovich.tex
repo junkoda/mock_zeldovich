@@ -1,5 +1,6 @@
 \documentclass[a4paper,11pt]{article}
 \usepackage{amsmath}
+\usepackage{amsthm}
 \usepackage{amssymb}
 %\usepackage{fancyhdr}
 \usepackage{hyperref}
@@ -18,6 +19,9 @@
 \setlength{\textheight}{219.2mm}
 
 \setlength{\parindent}{0pt}
+
+%%
+\newtheorem{formula}{Formula}[section]
 
 %\pagestyle{fancy}
 %\renewcommand{\headrulewidth}{0pt}
@@ -125,10 +129,6 @@ and the diagonal term can be computed with Legendre polynomials,
   \mathcal{P}_2(\mu) = \frac{1}{2} \left( 3 \mu^2 - 1 \right)
 \end{align}
 
-\begin{equation}
-  \int \mathcal{P}_m(\mu) \mathcal{P}_n(\mu) d\mu =
-     \frac{2}{2 n + 1} \delta_{\ell n}
-\end{equation}
 
 \begin{equation}
   \xi_{22}(\bm{r}) = \frac{1}{3} \int \frac{d^3 k}{(2\pi)^3} \,
@@ -138,6 +138,241 @@ and the diagonal term can be computed with Legendre polynomials,
 where $\xi_\ell$ is the multipoles of the displacement correlation function
 
 \section{Discrete Theory}
+
+\section{Formulae}
+
+\begin{equation}
+  \int_{-1}^1 P_\ell(\mu) P_m(\mu) d\mu = \frac{2}{2 \ell + 1} \delta_{\ell m}
+\end{equation}
+
+\begin{equation}
+  4\pi \int_0^\infty r^2 dr j_\ell(kr) j_\ell(k'r) =
+    \frac{2\pi^2}{k^2} \delta_D(k - k')
+\end{equation}
+
+\subsection{Numerical check}
+
+Inverse spherical-Bessel transform:
+\begin{align}
+  P(k) &= 4 \pi k^2 \int \Psi_0(r) j_0(kr) r^2 dr\\
+  P(k) &= 4 \pi k^3 \int \Psi_1(r) j_1(kr) r^3 dr
+\end{align}
+
+Linear limit:
+\begin{equation}
+  e^{-\frac{1}{2} \Sigma(k, r)} - 1 \approx -\frac{1}{2} \Sigma(k, r)
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+  &\frac{1}{2} \int_{-1}^1 \! d\cos\theta \, e^{-ikr \cos\theta}
+  \left\{
+  \Psi_1(r) - \sigma_v^2 + \left[ \Psi_0(r) - 3 \Psi_1(r) \right] \cos^2 \theta
+  \right\}\\
+  &= \left[ \frac{1}{3}\Psi_0 - \sigma_v^2 \right] j_0(kr)
+     + 2\left[ \Psi_1 - \frac{1}{3}\Psi_0 \right] j_2(kr)
+  \end{split}
+\end{equation}
+
+
+\begin{equation}
+  \cos^2 \theta = \frac{1}{3}\left[ P_0(\cos\theta) + 2 P_2(\cos\theta) \right]
+\end{equation}
+  
+  
+\begin{equation}
+  P(k) = 4\pi k^2 \int r^2 dr \left\{
+  \left[\frac{1}{3} \Psi_0(r) - \sigma_v^2 \right] j_0(kr)
+  + 2 \left[ \Psi_1(r) - \frac{1}{3} \Psi_0 \right] j_2(kr)
+  \right\}
+\end{equation}
+
+\begin{equation}
+  \begin{split}
+    \frac{j_1(z)}{z} &= \frac{\sin z}{z^3} - \frac{\cos z}{z^2} \\
+    &= \frac{1}{3} j_2(z) + \frac{1}{3} j_0(kr)
+  \end{split}
+\end{equation}
+
+\begin{equation}
+  \langle \Psi_i(p) \Psi_j(q) \rangle
+  = \Psi_\parallel(r) \hat{r}_i \hat{r}_j
+  + \Psi_\perp(r) (\delta_{ij} - \hat{r}_i \hat{r}_j)
+\end{equation}
+
+\begin{align}
+  \Psi_\parallel(r) &= \frac{1}{2\pi^2} \int \! dk \, P(k)
+  \left[j_0(kr) - 2 \frac{j_1(kr)}{kr} \right] \equiv \Psi_0(r) - 2 \Psi_1(r)\\
+  \Psi_\perp(r) &= \frac{1}{2\pi^2} \int \! dk \, P(k)
+  \frac{j_1(kr)}{kr} \equiv \Psi_1(r)
+\end{align}
+
+\begin{align}
+  \Psi_0(kr) &\equiv \frac{1}{2\pi^2} \int \! dk \, P(k) j_0(kr) \\
+  \Psi_1(kr) &\equiv \frac{1}{2\pi^2} \int \! dk \, P(k) \frac{j_1(kr)}{kr}
+\end{align}
+
+\begin{align}
+  \left\langle \Psi_i(\bm{p}) \Psi(\bm{q}) \right\rangle
+  &= \int d^3 d_1 d^3 k_2 \, \frac{k_{1, i}}{k_1^2} \frac{k_{2,j}}{k_2^2}
+     \langle \delta(\bm{k}_1) \delta(\bm{k}_2)^* \rangle e^{i\bm{k}_1 \cdot \bm{p}}
+     e^{-i\bm{k}_2 \cdot \bm{q}}\\
+  &= \int \! d^3 \hat{k}_i \hat{k}_j \frac{P(k)}{k^2} e^{i\bm{k}\cdot \bm{r}} 
+\end{align}
+
+\appendix
+
+\section{Formulae}
+
+\begin{formula}
+  Plane wave expansion
+  \begin{equation}
+    \exp^{i\bm{k} \cdot \bm{r}} = \sum_{\ell=0}^\infty (2 \ell + 1) i^\ell j_\ell(kr) \mathcal{P}_\ell (\cos \theta),
+  \end{equation}
+where $\bm{k} \cdot \bm{r} = k r \cos\theta$.
+\end{formula}
+
+\begin{formula}
+  Orthogonality of Legendre polynomials
+  \begin{equation}
+    \int \mathcal{P}_m(\mu) \mathcal{P}_n(\mu) d\mu =
+    \frac{2}{2 n + 1} \delta_{\ell n}
+  \end{equation}
+\end{formula}
+
+\begin{formula}
+  Orthogonality of spherical Bessel functions
+  \begin{equation}
+    \int \! r^2 dr j_\ell(kr) j_\ell(k'r)
+    = \frac{\pi}{2k^2} \delta_D(k - k').
+  \end{equation}
+\end{formula}
+
+\begin{formula}
+  \label{formula:cos2}
+  \begin{equation}
+    \int d\Omega_k \cos^2 \theta e^{i\bm{k}\cdot\bm{r}}
+    =  4\pi \left[ j_0(kr) - 2 j_2(kr) \right]
+  \end{equation}
+\end{formula}
+
+\begin{proof}
+  Legendre polynomials $P_0 = 1$ and $P_2(\cos\theta) = \frac{1}{2} (3 \cos^2\theta - 1)$ give,
+  \begin{equation}
+    \cos^2 \theta = \frac{1}{3}( P_0 + 2P_2 )
+  \end{equation}
+  The plane-wave expation and the orthognality of Legendre polynomials give the formula.
+\end{proof}
+
+%
+% k_i k_j exp(ikr)
+%
+\begin{formula}
+  \label{formula-moment}
+  \begin{equation}
+    \frac{1}{4\pi}\int d\Omega_k \, \hat{k}_i \hat{k}_j e^{i\bm{k}\cdot\bm{r}}
+    = \frac{1}{3} \delta_{ij} j_0(kr) - \left(\hat{r}_i \hat{r}_j - \frac{1}{3} \delta_{ij} \right) j_2(kr)
+  \end{equation}
+\end{formula}
+
+\begin{proof}
+  The integral must be a linear combination of $\delta_{ij}$ and
+  $\hat{r}_i \hat{r}_j$ due to its tensor structure. Let coefficient
+  of the linear cobination be $A$ and $B$:
+
+  \begin{equation}
+    \int\! d\Omega_k \, \hat{k}_i \hat{k}_j \exp^{i\bm{k}\cdot\bm{r}}
+    = A \delta_{ij} + B \hat{r}_i \hat{r}_j
+  \end{equation}
+
+  Similarly, $\sum_{ij} \delta_{ij}$ on both sides gives,
+  \begin{equation}
+    \int \! d\Omega_k \exp^{i\bm{k}\cdot\bm{r}} = 4 \pi j_0(kr)
+    = 3 A + B.
+  \end{equation}
+
+  $\sum_{ij} \hat{r}_i \hat{r}_j$ on both sides gives,
+  \begin{equation}
+    \int \! d\Omega_k \cos^2 \theta \exp^{i\bm{k}\cdot\bm{r}}
+      = A + B,
+  \end{equation}
+  where $\cos\theta = \hat{\bm{k}} \cdot \hat{\bm{r}}$.
+
+  Formula~\ref{formula:cos2} gives,
+  \begin{equation}
+    A + B = \frac{4}{3}\pi \left[ j_0(kr) - 2 j_2(kr) \right]
+  \end{equation}
+
+  Solving two linear equations on $A$ and $B$ give,
+  \begin{align}
+    A &= \frac{1}{3} (j_0 + j_2)\\
+    B &= - j_2
+  \end{align}    
+\end{proof}
+
+%
+% \Psi_ij
+%
+\begin{formula}
+  \begin{equation}
+    \Psi_{ij} (\bm{r}) \equiv \langle \Psi_i(\bm{p}) \Psi_j(\bm{q}) \rangle =
+    \frac{1}{3} \Psi_0(r) \delta_{ij} - \left( \hat{r}_i \hat{r}_j - \frac{1}{3} \delta_{ij} \right) \Psi_2(r)
+  \end{equation}
+  where $\bm{r} \equiv \bm{p} - \bm{q}$ and,
+  \begin{equation}
+    \Psi_n(r) \equiv \frac{1}{2\pi^2} \int \! dk \, P(k) j_n(kr)
+  \end{equation}
+\end{formula}
+
+\begin{proof}
+  \begin{equation}
+    \begin{split}
+      \langle \Psi_i(\bm{p}) \Psi_j(\bm{q}) \rangle &=
+      \int \! \frac{d^3 k}{(2\pi)^3} \,
+        \hat{k}_i \hat{k}_j \frac{P(k)}{k^2} e^{i\bm{k}\cdot\bm{r}}\\
+      &= \frac{1}{2\pi^2} \int\! k^2 dk \, P(k) \left[
+         \frac{1}{3} j_0(kr) - \left( \hat{r}_i \hat{r}_j - \frac{1}{3}\delta_{ij} \right) j_2(kr) \right],
+    \end{split}
+  \end{equation}
+  using Formula~\ref{formula-moment}.
+\end{proof}
+
+\begin{formula}
+  The inverse of spherical Bessel transform
+  \begin{equation}
+    \frac{P(k)}{k^2} = \int 4\pi r^2 dr j_n(kr) \Psi_n(r)
+  \end{equation}
+\end{formula}
+
+\begin{equation}
+  P(k) = \int \! d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
+                          \left[ e^{-\frac{1}{2} \Sigma(\bm{k}, \bm{r})} - 1 \right]
+\end{equation}
+
+\begin{equation}
+  \Sigma(\bm{k}, \bm{r}) = \mathrm{Var} \left[
+   \bm{k} \cdot \bm{\Psi}(\bm{p}) - \bm{k} \cdot \bm{\Psi}(\bm{q}) \right]
+    = 2\left[ k^2 \sigma_v^2 - k_i k_j \Psi_{ij}(\bm{r}) \right]
+\end{equation}
+
+\begin{equation}
+  k^2 \sigma_v^2 = \textrm{Var}\left[ \bm{k}\cdot\bm{\Psi} \right]
+\end{equation}
+
+\begin{equation}
+  \sigma_v^2 = \frac{1}{6\pi^2}\int \! P(k) dk
+\end{equation}
+
+Linear limit
+
+\begin{align}
+  P(k) &\approx - \int \! d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
+           \frac{1}{2}\Sigma(\bm{k}, \bm{q})\\
+           &= \int\!d^3 r \, e^{-i\bm{k}\cdot\bm{r}}
+           k^2 \left[ \frac{1}{3} \Psi_0(r) - \sigma_v^2
+                 - \frac{2}{3} \mathcal{P}_2(\cos\theta) \Psi_2(r) \right]
+\end{align}
+
 
 
 \label{LastPage}
