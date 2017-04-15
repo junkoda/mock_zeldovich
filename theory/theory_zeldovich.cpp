@@ -96,9 +96,14 @@ int main(int argc, char* argv[])
     return 0;
   }
   else if(vm.count("test1")) {
-    corr_fourier_test();
+    corr_fourier_test1();
     return 0;
   }
+  else if(vm.count("test2")) {
+    corr_fourier_test2();
+    return 0;
+  }
+
 
 
   /*

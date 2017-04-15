@@ -19,7 +19,8 @@ CorrelationFunction* corr_alloc(double const * const r, const size_t n);
 void corr_integrate_psi_hybrid();
 void corr_print();
 
-void corr_fourier_test();
+void corr_fourier_test1();
+void corr_fourier_test2();
 /*
 double corr_dd(const int i);
 double corr_du1(const int i);
