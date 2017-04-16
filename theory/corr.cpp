@@ -368,14 +368,13 @@ void corr_fourier_test2()
   const int nmu=1000;
   const double dmu= 1.0/nmu;
   //const double mu = 1.0;
-  const double amp= 0.001;
+  const double amp= 1.0;
 
   for(double k= 0.01; k<1.0; k+=0.01) {
     double integ= 0.0;
 
     for(int imu=0; imu<nmu; ++imu) {  // dcosO integral
       double mu= (imu + 0.5)/nmu;     // mu = cosO
-      //{
       double cos2 = mu*mu - 1.0/3.0;  // cos^2 O - 1/3
 
       double integ_krc= 0.0;
@@ -402,6 +401,7 @@ void corr_fourier_test2()
 	//double y1 = 1.0/3*psi0->xi[i-1] - cos2*psi0->xi[i-1];
 	//double y2 = 1.0/3*psi0->xi[i  ] - cos2*psi0->xi[i  ];
 	// 1/3
+	/*
 	double p1= 1.0/3.0*(psi0->xi[i-1] - psi0->xi[0])
 	             - (mu*mu - 1.0)*psi2->xi[i-1];
 	//double y1 = r1*r1*(exp(k*k*p1) - exp(-k*k*sigma_v2));
@@ -410,19 +410,35 @@ void corr_fourier_test2()
 	double p2= 1.0/3.0*(psi0->xi[i  ] - psi0->xi[0])
 	             - (mu*mu - 1.0)*psi2->xi[i  ];
 	double y2 = 1.0/3.0*psi0->xi[i  ];
+	*/
 	//double y2 = r2*r2*(exp(k*k*p2) - exp(-k*k*sigma_v2));
 
+	// This is working for Psi0
+	/*
 	double xi1= exp(k*k*amp*(psi0->xi[i-1] - psi0->xi[0]))
 	            - exp(-k*k*amp*psi0->xi[0]);
 	double xi2= exp(k*k*amp*(psi0->xi[i  ] - psi0->xi[0]))
 	            - exp(-k*k*amp*psi0->xi[0]);
+	*/
+	// TODO 1/3
+	double xi1= exp(k*k*amp*((psi0->xi[i-1] - psi0->xi[0])/3.0
+				 - cos2*psi2->xi[i-1]))
+	            - exp(-k*k*amp*psi0->xi[0]/3.0);
+	double xi2= exp(k*k*amp*((psi0->xi[i  ] - psi0->xi[0])/3.0
+				 - cos2*psi2->xi[i]))
+	            - exp(-k*k*amp*psi0->xi[0]/3.0);
+
+	/*
+	double xi1= exp(k*k*amp*((mu*mu - 1.0/3.0)*psi2->xi[i-1]));
+
+	double xi2= exp(k*k*amp*((mu*mu - 1.0/3.0)*psi2->xi[i  ]));
+	*/
 
 	// psi0(r) ~ a0 + a1*kr
 	double a1= (xi2 - xi1)/(krc2 - krc1);
 	double a0= (xi1*krc2 - xi2*krc1)/(krc2 - krc1);
 
 	// integrate sin(kr)*(kr)*(a0 + a1*kr)
-	// This is working
 	/*
 	integ_krc +=  a1*(sin_integ2(krc2, sinkrc2, coskrc2) -
 			  sin_integ2(krc1, sinkrc1, coskrc1)) +
