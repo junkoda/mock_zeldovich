@@ -10,12 +10,17 @@
 using namespace std;
 using namespace boost::program_options;
 
-static void generate_random(const size_t np, const double boxsize,
-			    unsigned int seed,
+/*
+//static void generate_random(const size_t np, const double boxsize,
+//			    unsigned int seed,
 			    vector<Particle>& v);
 
+static void generate_grid(const int nc, const double boxsize,
+			  vector<Particle>& v);
+			  
 static double* compute_pk_grid(const PowerSpectrum& ps,
 			const size_t nc, const double boxsize);
+*/
 
 int main(int argc, char* argv[])
 {
@@ -37,8 +42,11 @@ int main(int argc, char* argv[])
     ("nc", value<int>()->default_value(64), "number of grid per dimension")
     ("boxsize", value<double>()->default_value(1000.0), "length of box on a side")
     ("a", value<double>()->default_value(1.0, "1"), "scale factor")
-    ("np", value<size_t>()->default_value(1000), "number of output particles")
-    ("seed", value<unsigned int>()->default_value(0), "random seed")
+    ("omega_m", value<double>()->default_value(0.308), "Omega_matter")
+    ("np", value<double>()->default_value(1000), "number of output particles")
+    ("seed", value<unsigned int>()->default_value(0), "random seed. initialise by time if 0.")
+    ("random", "place initial position random")
+    ("output,o", value<string>(), "output ascii filename")
     ;
 
   positional_options_description p;
@@ -55,32 +63,51 @@ int main(int argc, char* argv[])
 
   const string filename= vm["filename"].as<string>();
   const int nc= vm["nc"].as<int>(); assert(nc > 0);
+  const double omega_m= vm["omega_m"].as<double>();
   const double a= vm["a"].as<double>(); assert(a > 0);
-  const size_t np= vm["np"].as<size_t>();
+  //  const size_t np= (size_t) vm["np"].as<double>();
   const double boxsize= vm["boxsize"].as<double>(); assert(boxsize > 0.0);
   unsigned int seed= vm["seed"].as<unsigned int>();
 
-  if(seed == 0)
+  if(seed == 0) {
     seed= (unsigned int) time(NULL);
+  }
+
+  printf("seed = %u\n", seed);
+  printf("omega_m = %.4f\n", omega_m);
+
 
   PowerSpectrum ps(filename.c_str());
 
-  double* const pk_grid= compute_pk_grid(ps, nc, boxsize);
+  //double* const pk_grid= compute_pk_grid(ps, nc, boxsize);
 
+  cosmology_init(omega_m);
   lpt_init(nc, boxsize, 0);
-  lpt_generate_psi_x(seed, pk_grid, false);
 
-  vector<Particle> v;
-  generate_random(np, boxsize, seed, v);
+  Particles* const particles= new Particles(nc, boxsize);
+  
+  lpt_set_displacements(1, &ps, a, particles);
 
-  lpt_zeldovich_displacement_ngp(v, a);
+  FILE* fp;
+  if(vm.count("output")) {
+    string filename= vm["output"].as<string>();
+    fp=fopen(filename.c_str(), "w"); assert(fp);
+  }
+  else
+    fp= stdout;
 
+  {
+    size_t n= particles->np_local;
+    Particle const * const p= particles->p;
+    for(size_t i=0; i<n; ++i)
+      fprintf(fp, "%e %e %e\n", p[i].x[0], p[i].x[1], p[i].x[2]);
+  }
 
   // Finalize MPI
   comm_mpi_finalise();
 }
 
-
+/*
 void generate_random(const size_t np, const double boxsize,
 		     unsigned int seed,
 		     vector<Particle>& v)
@@ -100,6 +127,26 @@ void generate_random(const size_t np, const double boxsize,
   gsl_rng_free(rng);
 }
 
+void generate_grid(const int nc, const double boxsize,
+		   vector<Particle>& v)
+{
+  const double dx= boxsize/nc;
+  const size_t np= (size_t) nc*nc*nc;
+  v.reserve(np);
+
+  Particle p;
+  for(int ix=0; ix<nc; ++ix) {
+    p.x[0]= ix*dx;
+    for(int iy=0; iy<nc; ++iy) {
+      p.x[1]= iy*dx;
+      for(int iz=0; iz<nc; ++iz) {
+	p.x[2]= iz*dx;
+	v.push_back(p);
+      }
+    }
+  }
+}
+
 // Interpolation window function
 static inline double w(const double x)
 {
@@ -110,6 +157,7 @@ static inline double w(const double x)
   
   return sinc2*sinc2;
 }
+
 
 double* compute_pk_grid(const PowerSpectrum& ps,
 			const size_t nc, const double boxsize)
@@ -122,46 +170,26 @@ double* compute_pk_grid(const PowerSpectrum& ps,
   double fac= 2.0*M_PI/boxsize;
   double sin_fac= M_PI/nc; 
 
+  pkgrid[0] = 0.0;
+  
   for(int ix=0; ix<nc; ++ix) {
    int kx= ix <= knq ? ix : ix - nc;
    double w_x= w(sin_fac*kx);
    for(int iy=0; iy<nc; ++iy) {
     int ky = iy <= knq ? iy : iy - nc;
     double w_xy= w_x*w(sin_fac*ky);
-    for(int kz=0; kz<knq; ++kz) {
+
+    int kz0 = (ix == 0 && iy == 0);
+    for(int kz=kz0; kz<knq; ++kz) {
       double w_xyz= w_xy*w(sin_fac*kz);
       size_t index= (ix*nc + iy)*nckz + kz;
       double k= fac*sqrt(kx*kx + ky*ky + kz*kz);
 
-      /*
-      // Compute aliasing factor ???
-      for(int ax=-na; ax<na; ++ax) {
-       double kax= kx + ax*kp;
-       for(int ay=-na; ay<na; ++ay) {
-	double kay= ky + ay*kp;
-	for(int az=-na; az<na; ++az) {
-	  double kaz= kz + az*kp;
-	  double ka= sqrt(kax*kax + kay*kay + kaz*kaz);
-	  double kk= ka/k;
-
-	      float w1= w(sin_fac*(kx+ax*kp))*
-		        w(sin_fac*(ky+ay*kp))*
-                        w(sin_fac*(kz+az*kp));
-	      float w2= w1*w1;
-	      float w4= w2*w2;
-	      float Pkfac= pow(ka/k, neff);;
-	      c2gg += w4*Pkfac;
-	    }
-	  }
-	}
-      */
-      
-
-      pkgrid[index] = ps.P(k)/w_xyz;
+      pkgrid[index] = ps.P(k); ///w_xyz;
     }
    }
   }
   return pkgrid;
 }
- 
+*/ 
     
