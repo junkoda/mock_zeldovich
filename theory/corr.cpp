@@ -9,10 +9,10 @@
 // intergrate_psi_hybrid() computes psi0 and psi1
 
 #include <iostream>
+#include <vector>
 #include <cstdio>
 #include <cmath>
 #include <cassert>
-#include <gsl/gsl_integration.h>
 #include <gsl/gsl_spline.h>
 #include <gsl/gsl_sf_bessel.h>
 #include "corr.h"
@@ -21,12 +21,14 @@
 
 using namespace std;
 
+CorrelationFunction* corr_alloc(vector<double>& r);
+
 //
 // Global variables
 //
 static PowerSpectrum const *p;
-static CorrelationFunction *psi0, *psi2;
-static gsl_integration_workspace *w;
+//static CorrelationFunction *psi0, *psi2;
+//static gsl_integration_workspace *w;
 
 //
 // Static functions
@@ -34,19 +36,17 @@ static gsl_integration_workspace *w;
 void integrate_psi_trapezoidal_r(const double r, double * const psi);
 void integrate_psi_hybrid_r(const double r, double * const psi);
 
-void corr_init(double const * const r, const size_t n,
-	       PowerSpectrum const * const p_)
+
+vector<CorrelationFunction*>
+corr_compute_psi(PowerSpectrum const * const ps, vector<double>& vr)
 {
-  p= p_;
+  p= ps;
 
-  w = gsl_integration_workspace_alloc(2000);
+  CorrelationFunction* psi0= corr_alloc(vr);
+  CorrelationFunction* psi2= corr_alloc(vr);
 
-  psi0= corr_alloc(r, n);
-  psi2= corr_alloc(r, n);
-}
 
-void corr_integrate_psi_hybrid()
-{
+  
   double const * const r= psi0->r;
   const size_t n= psi0->n;
 
@@ -60,29 +60,35 @@ void corr_integrate_psi_hybrid()
     psi2->xi[i]= psi[2];
   }
 
-  gsl_interp_init(psi0->interp, psi0->r, psi0->xi, n);
-  gsl_interp_init(psi2->interp, psi2->r, psi2->xi, n);
+  vector<CorrelationFunction*> psi;
+  psi.push_back(psi0);
+  psi.push_back(psi2);
+
+  return psi;
 }
 
-CorrelationFunction* corr_alloc(double const * const r, const size_t n)
+CorrelationFunction* corr_alloc(vector<double>& vr)
 {
+  size_t n= vr.size();
+  
   CorrelationFunction* corr=
     (CorrelationFunction*) malloc(sizeof(CorrelationFunction));
 
+  
   corr->n= n;
-  corr->r= r;
+  corr->r= (double*) malloc(sizeof(double)*n);
   corr->xi= (double*) malloc(sizeof(double)*n);
 
-  corr->interp= gsl_interp_alloc(gsl_interp_cspline, n);
-  corr->acc= gsl_interp_accel_alloc();
+  for(int i=0; i<n; ++i)
+    corr->r[i]= vr[i];
 
-  
   return corr;
 }
 
-void corr_print()
+void corr_print(CorrelationFunction const * const psi0,
+		CorrelationFunction const * const psi2)
 {
-  printf("# r psi0 psi1\n");
+  printf("# r psi0 psi2\n");
 
   const double mu = 1.0;
   const size_t n= psi0->n;
@@ -162,21 +168,8 @@ void integrate_psi_hybrid_r(const double r, double * const psi)
     double k1= p->k[i-1];
     double k2= p->k[i];
 
-    //double fac1= k1 < ktr ? (k1/ktr)*(k1/ktr)*(k1/ktr) : 1.0;
-    //double fac2= k2 < ktr ? (k2/ktr)*(k2/ktr)*(k2/ktr) : 1.0;
-
     double fac1= k1 < ktr ? (k1/ktr)*(k1/ktr) : 1.0;
     double fac2= k2 < ktr ? (k2/ktr)*(k2/ktr) : 1.0;
-
-    //if(k1 < ktr)
-    //double fac1= k1 < ktr ? exp(1/ktr - 1/k1) : 1.0;
-    //double fac2= k2 < ktr ? exp(1/ktr - 1/k2) : 1.0;
-    //if(k1 < ktr)
-    //fprintf(stderr, "%e %e %e\n", k1, 1/k1 - 1/ktr, fac1);
-    //double fac1= k1 < ktr ? 0.0 : 1.0;
-    //double fac2= k2 < ktr ? 0.0 : 1.0;
-	
-
 
     double P1= fac1*p->P[i-1];
     double P2= fac2*p->P[i];
@@ -213,12 +206,13 @@ void integrate_psi_hybrid_r(const double r, double * const psi)
     }
 
     // \int P(k) j2(kr) dkr
-    if(k1r < 1.0) { //k1r < 10000000.0) {
+    if(k1r < 1.0) {
       // Trapezoidal
       xi2 += 0.5*(gsl_sf_bessel_j2(k1r)*P1 +
 		  gsl_sf_bessel_j2(k2r)*P2)*(k2r - k1r);
     }
     else {
+      // analytic integration of (a1*kr + a0)*cos(kr) or sin(kr)
       // Linear interpolation P(k)/(kr)^2 = a1_inv1*kr + a0_inv1
       double a1_inv1= (P2/k2r - P1/k1r)/(k2r - k1r);
       double a0_inv1= (P1/k1r*k2r - P2/k2r*k1r)/(k2r - k1r);
@@ -266,10 +260,11 @@ void integrate_psi_hybrid_r(const double r, double * const psi)
   psi[2]= fac*xi2;
 }
 
-void corr_fourier_test1()
+void corr_fourier_test(CorrelationFunction const * const psi0,
+		       CorrelationFunction const * const psi2)
 {  
-  // Fourier transform xi(r) back to P(k)
-  printf("# fourier_test 1D\n");
+  // Fourier transform psi(r) back to P(k)
+  printf("# fourier_test\n");
   const size_t n= psi0->n; assert(n > 0);
 
   for(double k= 0.01; k<1.0; k+=0.01) {
@@ -353,151 +348,6 @@ void corr_fourier_test1()
   }
 }
 
-void corr_fourier_test2()
-{
-  //
-  // 2D Fourier transform Psi back to P(k) in linear limit
-  //
-  // P(k) = 4pi k^2 \int_0^1 dcosO \int dr r^2 dr
-  //          [ 1/3 \Psi_0(r) - (cos^2 O - 1/3) \Psi_2(r) ]
-  //
-  printf("# fourier_test 2D\n");
-  const size_t n= psi0->n; assert(n > 0);
-  const double sigma_v2 = psi0->xi[0]/3.0;
-
-  const int nmu=1000;
-  const double dmu= 1.0/nmu;
-  //const double mu = 1.0;
-  const double amp= 1.0;
-
-  for(double k= 0.01; k<1.0; k+=0.01) {
-    double integ= 0.0;
-
-    for(int imu=0; imu<nmu; ++imu) {  // dcosO integral
-      double mu= (imu + 0.5)/nmu;     // mu = cosO
-      double cos2 = mu*mu - 1.0/3.0;  // cos^2 O - 1/3
-
-      double integ_krc= 0.0;
-      for(size_t i=1; i<n; ++i) {
-	// krc = k r cosO
-	// r^2 dr = 1/(k cos)^3 O krc^2 dkr
-	double krc1= k*psi0->r[i-1]*mu;
-	double krc2= k*psi0->r[i]*mu;
-
-	double sinkrc1= sin(krc1);
-	double coskrc1= cos(krc1);
-
-	double sinkrc2= sin(krc2);
-	double coskrc2= cos(krc2);
-
-	// y = 1/3 Psi0 - (cos^2O - 1/3) Psi2
-	// DEBUG
-	double r1 = psi0->r[i-1];
-	double r2 = psi0->r[i];
-	//double y1 = exp(-r1);///(krc1*krc1);
-	//double y2 = exp(-r2);///(krc2*krc2);
-	//double y1 = psi0->xi[i-1]*exp(-r1);
-	//double y2 = psi0->xi[i  ]*exp(-r2);
-	//double y1 = 1.0/3*psi0->xi[i-1] - cos2*psi0->xi[i-1];
-	//double y2 = 1.0/3*psi0->xi[i  ] - cos2*psi0->xi[i  ];
-	// 1/3
-	/*
-	double p1= 1.0/3.0*(psi0->xi[i-1] - psi0->xi[0])
-	             - (mu*mu - 1.0)*psi2->xi[i-1];
-	//double y1 = r1*r1*(exp(k*k*p1) - exp(-k*k*sigma_v2));
-	double y1 = 1.0/3.0*psi0->xi[i-1];
-	
-	double p2= 1.0/3.0*(psi0->xi[i  ] - psi0->xi[0])
-	             - (mu*mu - 1.0)*psi2->xi[i  ];
-	double y2 = 1.0/3.0*psi0->xi[i  ];
-	*/
-	//double y2 = r2*r2*(exp(k*k*p2) - exp(-k*k*sigma_v2));
-
-	// This is working for Psi0
-	/*
-	double xi1= exp(k*k*amp*(psi0->xi[i-1] - psi0->xi[0]))
-	            - exp(-k*k*amp*psi0->xi[0]);
-	double xi2= exp(k*k*amp*(psi0->xi[i  ] - psi0->xi[0]))
-	            - exp(-k*k*amp*psi0->xi[0]);
-	*/
-	// TODO 1/3
-	double xi1= exp(k*k*amp*((psi0->xi[i-1] - psi0->xi[0])/3.0
-				 - cos2*psi2->xi[i-1]))
-	            - exp(-k*k*amp*psi0->xi[0]/3.0);
-	double xi2= exp(k*k*amp*((psi0->xi[i  ] - psi0->xi[0])/3.0
-				 - cos2*psi2->xi[i]))
-	            - exp(-k*k*amp*psi0->xi[0]/3.0);
-
-	/*
-	double xi1= exp(k*k*amp*((mu*mu - 1.0/3.0)*psi2->xi[i-1]));
-
-	double xi2= exp(k*k*amp*((mu*mu - 1.0/3.0)*psi2->xi[i  ]));
-	*/
-
-	// psi0(r) ~ a0 + a1*kr
-	double a1= (xi2 - xi1)/(krc2 - krc1);
-	double a0= (xi1*krc2 - xi2*krc1)/(krc2 - krc1);
-
-	// integrate sin(kr)*(kr)*(a0 + a1*kr)
-	/*
-	integ_krc +=  a1*(sin_integ2(krc2, sinkrc2, coskrc2) -
-			  sin_integ2(krc1, sinkrc1, coskrc1)) +
-	            + a0*(sin_integ1(krc2, sinkrc2, coskrc2) -
-			  sin_integ1(krc1, sinkrc1, coskrc1));
-	*/
-	integ_krc +=  a1*(cos_integ3(krc2, sinkrc2, coskrc2) -
-			  cos_integ3(krc1, sinkrc1, coskrc1)) +
-	            + a0*(cos_integ2(krc2, sinkrc2, coskrc2) -
-			  cos_integ2(krc1, sinkrc1, coskrc1));
-
-
-	//fprintf(stderr, "%e %e\n", y1, y2);
-
-	//double a1= (y2 - y1)/(krc2 - krc1);
-	//double a0= (y1*krc2 - y2*krc1)/(krc2 - krc1);
-
-	//
-	// \int (krc)^2 dkrc cos(krc) [ a0 + a1*krc ]
-	//
-
-	/*
-	integ_krc += a0*(sin_integ1(krc2, sinkrc2, coskrc2) -
-			 sin_integ1(krc1, sinkrc1, coskrc1))
-	           + a1*(sin_integ2(krc2, sinkrc2, coskrc2) -
-		         sin_integ2(krc2, sinkrc2, coskrc2));
-	*/
-	/*
-	integ_krc += a0*(cos_integ0(krc2, sinkrc2, coskrc2) -
-			 cos_integ0(krc1, sinkrc1, coskrc1));
-	  //	           + a1*(cos_integ1(krc2, sinkrc2, coskrc2) -
-	  //		 cos_integ1(krc1, sinkrc1, coskrc1));
-	  */
-
-
-	/*
-	integ_krc += a0*(cos_integ2(krc2, sinkrc2, coskrc2) -
-		         cos_integ2(krc1, sinkrc1, coskrc1))
-		   + a1*(cos_integ3(krc2, sinkrc2, coskrc2) -
-			 cos_integ3(krc1, sinkrc1, coskrc1));
-	*/
-
-	//integ_krc += 0.5*(y1*coskrc1 + y2*coskrc2)*(r2 - r1);
-	//integ_krc += 0.5*(y1*coskrc1 + y2*coskrc2)*(r2 - r1);
-      }
-      integ += integ_krc*dmu/(mu*mu*mu)/amp;
-    }
-
-    const double fac= 4.0*M_PI/(k*k*k);
-
-    printf("%e %e\n",
-	   k,
-	   fac*integ);
-
-    // fourier transform back
-    // Column 1: k
-    // Column 2: P(k) transformed back from linear limit
-  }
-}
 
 /*
 double corr_dd(const int i)
@@ -554,13 +404,5 @@ CorrelationFunction const * get_xi_du1()
   return xi_du1;
 }
 
-CorrelationFunction const * get_xi_uu0()
-{
-  return xi_uu0;
-}
-
-CorrelationFunction const * get_xi_uu2()
-{
-  return xi_uu2;
-}
 */
+
