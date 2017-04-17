@@ -16,7 +16,7 @@
 
 #include "lpt.h"
 
-//#include "gadget_file.h"
-//#include "hdf5_io.h"
+#include "gadget_file.h"
+#include "hdf5_io.h"
 
 #endif

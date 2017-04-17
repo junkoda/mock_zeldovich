@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
   opt.add_options()
     ("help,h", "display this help")
     ("filename,f", value<string>(), "power spectrum filename")
-    ("nc", value<int>()->default_value(64), "number of grid per dimension")
+    ("nc", value<int>()->default_value(64), "number of displacement grid per dimension")
     ("boxsize", value<double>()->default_value(1000.0), "length of box on a side")
     ("a", value<double>()->default_value(1.0, "1"), "scale factor")
     ("omega_m", value<double>()->default_value(0.308), "Omega_matter")
@@ -47,6 +47,9 @@ int main(int argc, char* argv[])
     ("seed", value<unsigned int>()->default_value(0), "random seed. initialise by time if 0.")
     ("random", "place initial position random")
     ("output,o", value<string>(), "output ascii filename")
+    ("fix-amplitude", "fix delta amplitude")
+    ("lattice", "place unperturbed particles in lattice")
+    ("random-ngp", "random unperturbed particles + NGP displacement interpolation")
     ;
 
   positional_options_description p;
@@ -65,7 +68,7 @@ int main(int argc, char* argv[])
   const int nc= vm["nc"].as<int>(); assert(nc > 0);
   const double omega_m= vm["omega_m"].as<double>();
   const double a= vm["a"].as<double>(); assert(a > 0);
-  //  const size_t np= (size_t) vm["np"].as<double>();
+  const size_t np= (size_t) vm["np"].as<double>();
   const double boxsize= vm["boxsize"].as<double>(); assert(boxsize > 0.0);
   unsigned int seed= vm["seed"].as<unsigned int>();
 
@@ -85,8 +88,18 @@ int main(int argc, char* argv[])
   lpt_init(nc, boxsize, 0);
 
   Particles* const particles= new Particles(nc, boxsize);
-  
-  lpt_set_displacements(1, &ps, a, particles);
+
+  if(vm.count("lattice")) {
+    lpt_set_displacements(seed, &ps, a, particles);
+  }
+  else if(vm.count("random-ngp")) {
+    lpt_set_displacements_ngp(seed, &ps, a, nc*nc*nc, particles);
+  }
+  else {
+    cerr << "Method not specified --lattice or --ngp";
+    return 1;
+  }
+	
 
   FILE* fp;
   if(vm.count("output")) {

@@ -8,6 +8,8 @@
 #include <cmath>
 #include <cassert>
 #include <gsl/gsl_rng.h>
+
+#include "comm.h"
 #include "msg.h"
 #include "mem.h"
 #include "config.h"
@@ -26,17 +28,13 @@ namespace {
   size_t nc= 0;
   size_t local_nx;
   size_t local_ix0;
-  Float offset= 0.5f;
+  Float offset= 0.5;
 
   FFT* fft_psi[3];    // Zeldovichi displacement Psi_i
-  //FFT* fft_psi_ij[6]; // derivative Psi_i,j= dPsi_i/dq_j
-  //FFT* fft_psi2[3];   // 2nd order displacement Psi(2)
-  //FFT* fft_div_psi2;  // divergence of Psi(2)
 
   void set_seedtable(const int nc, gsl_rng* random_generator,
 		     unsigned int* const stable);
   void lpt_generate_psi_k(const unsigned long seed, PowerSpectrum* const);
-  //void lpt_compute_psi2_k(void);
 }
 
 void lpt_init(const int nc_, const double boxsize_, Mem* mem)
@@ -56,13 +54,6 @@ void lpt_init(const int nc_, const double boxsize_, Mem* mem)
   for(int i=0; i<3; i++)
     fft_psi[i]= new FFT("Psi_i", nc, mem, 0);
 
-  //for(int i=0; i<6; i++)
-  //  fft_psi_ij[i]= new FFT("Psi_ij", nc, mem, 0);
-
-  //  for(int i=0; i<3; i++)
-  //  fft_psi2[i]= fft_psi_ij[i];
-
-  //fft_div_psi2= fft_psi_ij[3];
   
   seedtable = (unsigned int *) malloc(nc*nc*sizeof(unsigned int)); assert(seedtable);
 
@@ -75,22 +66,12 @@ void lpt_init(const int nc_, const double boxsize_, Mem* mem)
     assert(fft_psi[i]->local_nx == local_nx);
     assert(fft_psi[i]->local_ix0 == local_ix0);
   }
-  /*
-  for(int i=0; i<6; i++) {
-    assert(fft_psi_ij[i]->nc == nc);
-    assert(fft_psi_ij[i]->local_nx == local_nx);
-    assert(fft_psi_ij[i]->local_ix0 == local_ix0);
-  }
-  */
 }
 
 void lpt_free()
 {
   for(int i=0; i<3; i++)
     delete fft_psi[i];
-
-  //for(int i=0; i<6; i++)
-  //  delete fft_psi_ij[i];
 
   free(seedtable);
   seedtable= 0;
@@ -118,20 +99,13 @@ void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
  
   lpt_generate_psi_k(seed, ps);
 
-  //lpt_compute_psi2_k();
-
-  // precondition: psi_k in fft_psi[]->fk and psi2_k in fft_psi2[]->fk
-
-  // Convert Psi_k Psi2_k to realspace
+  // Convert Psi_k to realspace
   msg_printf(msg_verbose, "Fourier transforming 2LPT displacements\n");
   for(int i=0; i<3; i++) {
     fft_psi[i]->execute_inverse();
-    //fft_psi2[i]->execute_inverse();
   }
 
   Float* psi[]=  {fft_psi[0]->fx, fft_psi[1]->fx, fft_psi[2]->fx};
-  //  Float* psi2[]= {fft_psi2[0]->fx, fft_psi2[1]->fx, fft_psi2[2]->fx};
-  
 
   msg_printf(msg_verbose, "Setting particle grid and displacements\n");
 
@@ -139,51 +113,141 @@ void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
   const Float dx= boxsize/nc;
   Particle* p= particles->p;
 
-  //double nmesh3_inv= 1.0/pow((double)nc, 3.0);
   uint64_t id= (uint64_t) local_ix0*nc*nc + 1;
 
   const Float D1= cosmology_D_growth(a);
-  //const Float D2= cosmology_D2_growth(a, D1);
   const Float Dv= cosmology_Dv_growth(a, D1);
-
-  msg_printf(msg_verbose, "LPT growth factor for a=%e: D1= %e\n",
-	     a, D1);
-
-  double sum2= 0.0;
-
+  long double sum2 = 0.0;
+  
   Float x[3];
   for(size_t ix=0; ix<local_nx; ix++) {
-   x[0]= (local_ix0 + ix + offset)*dx;
-   for(size_t iy=0; iy<nc; iy++) {
-    x[1]= (iy + offset)*dx;
-    for(int iz=0; iz<nc; iz++) {
-     x[2]= (iz + offset)*dx;
-
-     size_t index= (ix*nc + iy)*nczr + iz;
-     for(int k=0; k<3; k++) {
-       Float dis=  psi[k][index];
-       //Float dis2= nmesh3_inv*psi2[k][index];
-       // psi2 had two inverse Fourier transofroms, giving additional nmesh3
-       
-       p->x[k]= x[k] + D1*dis;// + D2*dis2;
-       //p->dx1[k]= dis;              // 1LPT extrapolated to a=1
-       //p->dx2[k]= dis2;             // 2LPT displacement
-                                    // multiply by cosmology_D2_growth() for a
-       p->v[k]= Dv*dis;                  // velocity in comoving 2LPT
-
-       //sum2 += (D1*dis + D2*dis2)*(D1*dis + D2*dis2);
-     }
-     p->id= id++;
-     
-     p++;
+    x[0]= (local_ix0 + ix + offset)*dx;
+    for(size_t iy=0; iy<nc; iy++) {
+      x[1]= (iy + offset)*dx;
+      for(int iz=0; iz<nc; iz++) {
+	x[2]= (iz + offset)*dx;
+	
+	size_t index= (ix*nc + iy)*nczr + iz;
+	for(int k=0; k<3; k++) {
+	  Float dis=  psi[k][index];
+	  
+	  p->x[k]= x[k] + D1*dis;
+	  p->v[k]= Dv*dis;
+	  
+	  sum2 += dis*dis;	 
+	}
+	p->id= id++;
+	
+	p++;
+      }
     }
-   }
+  }
+  
+  double f= cosmology_f_growth_rate(a);
+  
+  msg_printf(msg_info, "scale_factor  a = %.15le\n", a);
+  msg_printf(msg_info, "growth factor D= %.15le\n", D1);
+  msg_printf(msg_info, "growth_rate   f = %.15le\n", f);
+  msg_printf(msg_info, "displacement_rms sigma = %.15lle\n",
+	     sum2/(3.0*np_local));
+
+
+  msg_printf(msg_verbose, "2LPT displacements calculated.\n");
+
+  uint64_t nc64= nc;
+  
+  particles->np_local= np_local;
+  particles->np_total= nc64*nc64*nc64;
+  particles->a_x= a;
+  particles->a_v= a;
+
+}
+
+void lpt_set_displacements_ngp(const unsigned long seed,
+			       PowerSpectrum* const ps,
+			       const double a,
+			       const size_t np,
+			       Particles* particles)
+{
+  if(nc == 0 || seedtable == 0) {
+    msg_printf(msg_error,
+	       "Error: lpt_init() not called before lpt_set_displacements");
+    return;
+  }
+  
+  msg_printf(msg_verbose, "Computing 2LPT\n");
+  assert(particles);
+  size_t np_local= np;
+  if(particles->np_allocated < np_local)
+    msg_abort("Error: Not enough particles allocated to put initial particles\n"
+	      "np_allocated= %lu < required %lu\n",
+	      particles->np_allocated, np_local);
+ 
+  lpt_generate_psi_k(seed, ps);
+
+  // Convert Psi_k to realspace
+  msg_printf(msg_verbose, "Fourier transforming 2LPT displacements\n");
+  for(int i=0; i<3; i++) {
+    fft_psi[i]->execute_inverse();
   }
 
-  msg_printf(msg_debug, "disp rms %e\n", sqrt(sum2/(local_nx*nc*nc)));
-  p= particles->p;
+  Float* psi[]=  {fft_psi[0]->fx, fft_psi[1]->fx, fft_psi[2]->fx};
+
+  msg_printf(msg_verbose, "Setting particle grid and displacements\n");
+
+  const size_t ncz= 2*(nc/2 + 1);
+  //const Float dx= boxsize/nc;
+  const Float dx_inv= nc/boxsize;
+  Particle* p= particles->p;
+
+  uint64_t id= (uint64_t) local_ix0*nc*nc + 1;
+
+  const Float D1= cosmology_D_growth(a);
+  const Float Dv= cosmology_Dv_growth(a, D1);
+  long double sum2 = 0.0;
   
-  msg_printf(msg_verbose, "2LPT displacements calculated.\n");
+  assert(comm_n_nodes() == 1); // Not MPIzed
+  //init rng
+  gsl_rng* rng= gsl_rng_alloc(gsl_rng_ranlxd1);
+  gsl_rng_set(rng, seed + 1);
+
+  for(size_t i=0; i<np; ++i) {
+    Float x[3];
+    int ix[3];
+
+    for(int k=0; k<3; ++k) {
+      x[k]= boxsize*gsl_rng_uniform(rng);
+      ix[k]= (int) floor(x[k]*dx_inv);
+      ix[k]= (ix[k] + nc) % nc;
+    }
+    
+    size_t index= (ix[0]*nc + ix[1])*ncz + ix[2];
+    for(int k=0; k<3; k++) {
+      Float dis=  psi[k][index];
+	  
+      p->x[k]= x[k] + D1*dis;
+      p->v[k]= Dv*dis;
+	  
+      sum2 += dis*dis;	 
+    }
+    p->id= id++;
+	
+    p++;
+  }
+
+
+  gsl_rng_free(rng);
+    
+  double f= cosmology_f_growth_rate(a);
+  
+  msg_printf(msg_info, "scale_factor  a = %.15le\n", a);
+  msg_printf(msg_info, "growth factor D= %.15le\n", D1);
+  msg_printf(msg_info, "growth_rate   f = %.15le\n", f);
+  msg_printf(msg_info, "displacement_rms sigma = %.15lle\n",
+	     sum2/(3.0*np_local));
+
+
+  msg_printf(msg_verbose, "2LPT displacements calculated (random + NGP).\n");
 
   uint64_t nc64= nc;
   

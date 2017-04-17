@@ -13,7 +13,9 @@ struct Particle {
   Float  x[3];
   Float  v[3];
   //Float  dx1[3];  // 1LPT (ZA) displacement
+  //Float  dx2[3];  // 2LPT displacement
   uint64_t id;      // Particle index 1,2,3...
+  //uint64_t igrp;      // Group index
 };
 
 struct Pos {

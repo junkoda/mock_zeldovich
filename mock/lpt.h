@@ -11,6 +11,13 @@ void lpt_free();
 
 void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
 			   const double a, Particles* particles);
+void lpt_set_displacements_ngp(const unsigned long seed,
+			       PowerSpectrum* const ps,
+			       const double a,
+			       const size_t np,
+			       Particles* particles);
+
+
 FFT* lpt_generate_phi(const unsigned long seed, PowerSpectrum* const);
 void lpt_set_offset(Float offset_);
 
