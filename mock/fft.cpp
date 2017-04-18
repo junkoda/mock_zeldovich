@@ -10,7 +10,7 @@
 #include "comm.h"
 #include "mem.h"
 #include "msg.h"
-#include "util.h"
+//#include "util.h"
 #include "fft.h"
 
 using namespace std;
