@@ -24,7 +24,7 @@ struct Pos {
 
 class Particles {
  public:
-  Particles(const int nc, const double boxsize);
+  Particles(const size_t np, const double boxsize);
   ~Particles();
   void update_np_total();
   

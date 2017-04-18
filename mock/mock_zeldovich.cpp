@@ -68,7 +68,6 @@ int main(int argc, char* argv[])
   const int nc= vm["nc"].as<int>(); assert(nc > 0);
   const double omega_m= vm["omega_m"].as<double>();
   const double a= vm["a"].as<double>(); assert(a > 0);
-  const size_t np= (size_t) vm["np"].as<double>();
   const double boxsize= vm["boxsize"].as<double>(); assert(boxsize > 0.0);
   unsigned int seed= vm["seed"].as<unsigned int>();
 
@@ -86,14 +85,18 @@ int main(int argc, char* argv[])
 
   cosmology_init(omega_m);
   lpt_init(nc, boxsize, 0);
-
-  Particles* const particles= new Particles(nc, boxsize);
+ 
+  Particles* particles;
 
   if(vm.count("lattice")) {
+    size_t np= (size_t) nc*nc*nc;
+    particles= new Particles(np, boxsize);
     lpt_set_displacements(seed, &ps, a, particles);
   }
   else if(vm.count("random-ngp")) {
-    lpt_set_displacements_ngp(seed, &ps, a, nc*nc*nc, particles);
+    const size_t np= (size_t) vm["np"].as<double>();
+    particles= new Particles(np, boxsize);
+    lpt_set_displacements_ngp(seed, &ps, a, np, particles);
   }
   else {
     cerr << "Method not specified --lattice or --ngp";
