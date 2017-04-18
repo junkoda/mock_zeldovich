@@ -55,16 +55,17 @@ void lpt_init(const int nc_, const double boxsize_, Mem* mem)
     fft_psi[i]= new FFT("Psi_i", nc, mem, 0);
 
   
-  seedtable = (unsigned int *) malloc(nc*nc*sizeof(unsigned int)); assert(seedtable);
+  seedtable = (unsigned int *) malloc(nc*nc*sizeof(unsigned int));
+  assert(seedtable);
 
   // checks
   local_nx= fft_psi[0]->local_nx;
   local_ix0= fft_psi[0]->local_ix0;
   
   for(int i=0; i<3; i++) {
-    assert(fft_psi[i]->nc == nc);
-    assert(fft_psi[i]->local_nx == local_nx);
-    assert(fft_psi[i]->local_ix0 == local_ix0);
+    assert((size_t) fft_psi[i]->nc == nc);
+    assert((size_t) fft_psi[i]->local_nx == local_nx);
+    assert((size_t) fft_psi[i]->local_ix0 == local_ix0);
   }
 }
 
@@ -124,7 +125,7 @@ void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
     x[0]= (local_ix0 + ix + offset)*dx;
     for(size_t iy=0; iy<nc; iy++) {
       x[1]= (iy + offset)*dx;
-      for(int iz=0; iz<nc; iz++) {
+      for(size_t iz=0; iz<nc; iz++) {
 	x[2]= (iz + offset)*dx;
 	
 	size_t index= (ix*nc + iy)*nczr + iz;
@@ -436,7 +437,7 @@ void lpt_generate_psi_k(const unsigned long seed, PowerSpectrum* const ps)
 	      if(iix == nc)
 		iix = 0;
 	      int iiy = nc - iy;
-	      if(iiy == nc)
+	      if((size_t) iiy == nc)
 		iiy = 0;
 	      
 	      if(local_ix0 <= ix && ix < (local_ix0 + local_nx)) {
