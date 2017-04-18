@@ -70,6 +70,7 @@ int main(int argc, char* argv[])
   const double a= vm["a"].as<double>(); assert(a > 0);
   const double boxsize= vm["boxsize"].as<double>(); assert(boxsize > 0.0);
   unsigned int seed= vm["seed"].as<unsigned int>();
+  const bool fix_amplitude= vm.count("fix-amplitude");
 
   if(seed == 0) {
     seed= (unsigned int) time(NULL);
@@ -91,12 +92,14 @@ int main(int argc, char* argv[])
   if(vm.count("lattice")) {
     size_t np= (size_t) nc*nc*nc;
     particles= new Particles(np, boxsize);
-    lpt_set_displacements(seed, &ps, a, particles);
+    lpt_set_displacements(seed, &ps, a, fix_amplitude, particles);
   }
   else if(vm.count("random-ngp")) {
     const size_t np= (size_t) vm["np"].as<double>();
     particles= new Particles(np, boxsize);
-    lpt_set_displacements_ngp(seed, &ps, a, np, particles);
+    lpt_set_displacements_ngp(seed, &ps, a, np, fix_amplitude,
+			      particles);
+
   }
   else {
     cerr << "Method not specified --lattice or --ngp";

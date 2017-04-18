@@ -107,13 +107,14 @@ int main(int argc, char* argv[])
     double k= ps->k[i];
     if(k_min <= k && k <= k_max) {
       double Pz= zeldovich_power_realspace(k, psi0, psi2, nmu);
-      printf("%e %e %e\n", k, ps->P[i], Pz);
+      printf("%e %e %e\n", k, Pz, ps->P[i]);
     }
   }
 
   // Column 1: k
-  // Column 2: P_linear
-  // Column 3: P_Zeldovich
+  // Column 2: P_Zeldovich
+  // Column 3: P_linear
+
 
   
   return 0;

@@ -34,7 +34,10 @@ namespace {
 
   void set_seedtable(const int nc, gsl_rng* random_generator,
 		     unsigned int* const stable);
-  void lpt_generate_psi_k(const unsigned long seed, PowerSpectrum* const);
+  void lpt_generate_psi_k(const unsigned long seed,
+			  PowerSpectrum* const,
+			  const int n_mas_correction,
+			  const int fix_amplitude);
 }
 
 void lpt_init(const int nc_, const double boxsize_, Mem* mem)
@@ -82,8 +85,10 @@ void lpt_free()
 
 
 void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
-			   const double a, Particles* particles)
+			   const double a, const bool fix_amplitude,
+			   Particles* particles)
 {
+  // lattice q
   if(nc == 0 || seedtable == 0) {
     msg_printf(msg_error,
 	       "Error: lpt_init() not called before lpt_set_displacements");
@@ -98,7 +103,7 @@ void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
 	      "np_allocated= %lu < required %lu\n",
 	      particles->np_allocated, np_local);
  
-  lpt_generate_psi_k(seed, ps);
+  lpt_generate_psi_k(seed, ps, 0, fix_amplitude);
 
   // Convert Psi_k to realspace
   msg_printf(msg_verbose, "Fourier transforming 2LPT displacements\n");
@@ -150,7 +155,7 @@ void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
   msg_printf(msg_info, "growth factor D= %.15le\n", D1);
   msg_printf(msg_info, "growth_rate   f = %.15le\n", f);
   msg_printf(msg_info, "displacement_rms sigma = %.15lle\n",
-	     sum2/(3.0*np_local));
+	     sqrt(sum2/(3.0*np_local)));
 
 
   msg_printf(msg_verbose, "2LPT displacements calculated.\n");
@@ -168,8 +173,10 @@ void lpt_set_displacements_ngp(const unsigned long seed,
 			       PowerSpectrum* const ps,
 			       const double a,
 			       const size_t np,
+			       const bool fix_amplitude,
 			       Particles* particles)
 {
+  // random q and NGP interpolation for Psi(q)
   if(nc == 0 || seedtable == 0) {
     msg_printf(msg_error,
 	       "Error: lpt_init() not called before lpt_set_displacements");
@@ -184,7 +191,7 @@ void lpt_set_displacements_ngp(const unsigned long seed,
 	      "np_allocated= %lu < required %lu\n",
 	      particles->np_allocated, np_local);
  
-  lpt_generate_psi_k(seed, ps);
+  lpt_generate_psi_k(seed, ps, 1, fix_amplitude);
 
   // Convert Psi_k to realspace
   msg_printf(msg_verbose, "Fourier transforming 2LPT displacements\n");
@@ -197,7 +204,6 @@ void lpt_set_displacements_ngp(const unsigned long seed,
   msg_printf(msg_verbose, "Setting particle grid and displacements\n");
 
   const size_t ncz= 2*(nc/2 + 1);
-  //const Float dx= boxsize/nc;
   const Float dx_inv= nc/boxsize;
   Particle* p= particles->p;
 
@@ -208,6 +214,7 @@ void lpt_set_displacements_ngp(const unsigned long seed,
   long double sum2 = 0.0;
   
   assert(comm_n_nodes() == 1); // Not MPIzed
+  
   //init rng
   gsl_rng* rng= gsl_rng_alloc(gsl_rng_ranlxd1);
   gsl_rng_set(rng, seed + 1);
@@ -306,8 +313,16 @@ void set_seedtable(const int nc, gsl_rng* random_generator,
   }
 }
 
+inline double w(const double tx)
+{
+  return tx == 0.0 ? 1.0 : sin(tx)/tx;
+}
 
-void lpt_generate_psi_k(const unsigned long seed, PowerSpectrum* const ps)
+
+void lpt_generate_psi_k(const unsigned long seed,
+			PowerSpectrum* const ps,
+			const int n_mas_correction,
+			const int fix_amplitude)
 {
   // Generates 1LPT (Zeldovich) displacements, Psi_k
   // from N-GenIC by Volker Springel
@@ -328,6 +343,8 @@ void lpt_generate_psi_k(const unsigned long seed, PowerSpectrum* const ps)
   gsl_rng_set(random_generator, seed);
   set_seedtable(nc, random_generator, seedtable);
 
+  const double sin_fac= 0.5*boxsize/nc;
+
   
   // clean the delta_k grid
   for(size_t ix=0; ix<local_nx; ix++)
@@ -345,12 +362,26 @@ void lpt_generate_psi_k(const unsigned long seed, PowerSpectrum* const ps)
     if(iix == nc)
       iix = 0;
 
+    if(ix < nc/2)
+      kvec[0]= dk*ix;
+    else
+      kvec[0]= -dk*(nc - ix);
+
+    double w_x= w(sin_fac*kvec[0]);
+
     if(!((local_ix0 <= ix  && ix  < (local_ix0 + local_nx)) ||
 	 (local_ix0 <= iix && iix < (local_ix0 + local_nx))))
       continue;
     
     for(size_t iy=0; iy<nc; iy++) {
       gsl_rng_set(random_generator, seedtable[ix*nc + iy]);
+
+      if(iy < nc/2)
+	kvec[1]= dk*iy;
+      else
+	kvec[1]= -dk*(nc - iy);
+
+      double w_xy= w_x*w(sin_fac*kvec[1]);
       
       for(size_t iz=0; iz<nc/2; iz++) {
 	double phase= gsl_rng_uniform(random_generator)*2*M_PI;
@@ -359,25 +390,18 @@ void lpt_generate_psi_k(const unsigned long seed, PowerSpectrum* const ps)
 	  ampl = gsl_rng_uniform(random_generator);
 	while(ampl == 0.0);
 
+
 	if(ix == nc/2 || iy == nc/2 || iz == nc/2)
 	  continue;
 	if(ix == 0 && iy == 0 && iz == 0)
 	  continue;
 	
-	if(ix < nc/2)
-	  kvec[0]= dk*ix;
-	else
-	  kvec[0]= -dk*(nc - ix);
-	
-	if(iy < nc/2)
-	  kvec[1]= dk*iy;
-	else
-	  kvec[1]= -dk*(nc - iy);
-	
 	if(iz < nc/2)
 	  kvec[2]= dk*iz;
 	else
 	  kvec[2]= -dk*(nc - iz);
+
+	double w_xyz= w_xy*w(sin_fac*kvec[2]);
 	
 	double kmag2 = kvec[0]*kvec[0] + kvec[1]*kvec[1] + kvec[2]*kvec[2];
 	double kmag = sqrt(kmag2);
@@ -394,10 +418,14 @@ void lpt_generate_psi_k(const unsigned long seed, PowerSpectrum* const ps)
 	if(fabs(kvec[2]) > knq)
 	  continue;
 #endif
+
+	double delta2;
+	if(fix_amplitude)
+	  delta2= fac_2pi3*ps->P(kmag);
+	else
+	  delta2= -log(ampl)*fac_2pi3*ps->P(kmag);
 	
-	double delta2= -log(ampl)*fac_2pi3*ps->P(kmag);
-	
-	double delta_k_mag= fac*sqrt(delta2);
+	double delta_k_mag= fac*sqrt(delta2)/pow(w_xyz, n_mas_correction);
 	// delta_k_mag -- |delta_k| extrapolated to a=1
 	// Displacement is extrapolated to a=1
 
