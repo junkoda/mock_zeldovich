@@ -27,11 +27,6 @@ int main(int argc, char* argv[])
   // Initialise MPI
   comm_mpi_init(&argc, &argv);
 
-  if(comm_n_nodes() > 1) {
-    cerr << "Error: only works with mpirun -n 1\n";
-    return 1;
-  }
-
   //
   // command-line options (Boost program_options)
   //
@@ -43,7 +38,7 @@ int main(int argc, char* argv[])
     ("boxsize", value<double>()->default_value(1000.0), "length of box on a side")
     ("a", value<double>()->default_value(1.0, "1"), "scale factor")
     ("omega_m", value<double>()->default_value(0.308), "Omega_matter")
-    ("np", value<double>()->default_value(1000), "number of output particles")
+    ("np", value<double>()->default_value(0), "number of output particles")
     ("seed", value<unsigned int>()->default_value(0), "random seed. initialise by time if 0.")
     ("random", "place initial position random")
     ("output,o", value<string>(), "output ascii filename")
@@ -71,13 +66,14 @@ int main(int argc, char* argv[])
   const double boxsize= vm["boxsize"].as<double>(); assert(boxsize > 0.0);
   unsigned int seed= vm["seed"].as<unsigned int>();
   const bool fix_amplitude= vm.count("fix-amplitude");
-
+  const size_t np= (size_t) vm["np"].as<double>();
+    
   if(seed == 0) {
     seed= (unsigned int) time(NULL);
   }
 
-  printf("seed = %u\n", seed);
-  printf("omega_m = %.4f\n", omega_m);
+  //printf("seed = %u\n", seed);
+  //printf("omega_m = %.4f\n", omega_m);
 
 
   PowerSpectrum ps(filename.c_str());
@@ -87,19 +83,16 @@ int main(int argc, char* argv[])
   cosmology_init(omega_m);
   lpt_init(nc, boxsize, 0);
  
-  Particles* particles;
+  //Particles* particles;
+
+  const string ofilename= vm["output"].as<string>();
 
   if(vm.count("lattice")) {
-    size_t np= (size_t) nc*nc*nc;
-    particles= new Particles(np, boxsize);
-    lpt_set_displacements(seed, &ps, a, fix_amplitude, particles);
+    lpt_write_displacements(ofilename.c_str(), seed, &ps, a, np, fix_amplitude);
   }
   else if(vm.count("random-ngp")) {
-    const size_t np= (size_t) vm["np"].as<double>();
-    particles= new Particles(np, boxsize);
-    lpt_set_displacements_ngp(seed, &ps, a, np, fix_amplitude,
-			      particles);
-
+    abort();
+    //lpt_set_displacements_ngp(seed, &ps, a, np, fix_amplitude);
   }
   else {
     cerr << "Method not specified --lattice or --ngp";
@@ -107,7 +100,8 @@ int main(int argc, char* argv[])
   }
 	
 
-  FILE* fp;
+  //FILE* fp;
+  /*
   if(vm.count("output")) {
     string filename= vm["output"].as<string>();
     fp=fopen(filename.c_str(), "w"); assert(fp);
@@ -121,7 +115,7 @@ int main(int argc, char* argv[])
     for(size_t i=0; i<n; ++i)
       fprintf(fp, "%e %e %e\n", p[i].x[0], p[i].x[1], p[i].x[2]);
   }
-
+  */
   // Finalize MPI
   comm_mpi_finalise();
 }

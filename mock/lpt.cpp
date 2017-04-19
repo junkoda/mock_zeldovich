@@ -84,11 +84,15 @@ void lpt_free()
 }
 
 
-void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
-			   const double a, const bool fix_amplitude,
-			   Particles* particles)
+void lpt_write_displacements(const char filename[], 
+			   const unsigned long seed, PowerSpectrum* const ps,
+			   const double a, const size_t np,
+			   const bool fix_amplitude)
 {
-  // lattice q
+  // Place unperturbed particles in lattice
+  // perturbe with Zeldovich approximation
+  // subsample to np particles (expected value)
+  // lattice initial condition
   if(nc == 0 || seedtable == 0) {
     msg_printf(msg_error,
 	       "Error: lpt_init() not called before lpt_set_displacements");
@@ -96,13 +100,7 @@ void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
   }
   
   msg_printf(msg_verbose, "Computing 2LPT\n");
-  assert(particles);
   size_t np_local= local_nx*nc*nc;
-  if(particles->np_allocated < np_local)
-    msg_abort("Error: Not enough particles allocated to put initial particles\n"
-	      "np_allocated= %lu < required %lu\n",
-	      particles->np_allocated, np_local);
- 
   lpt_generate_psi_k(seed, ps, 0, fix_amplitude);
 
   // Convert Psi_k to realspace
@@ -117,38 +115,87 @@ void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
 
   const size_t nczr= 2*(nc/2 + 1);
   const Float dx= boxsize/nc;
-  Particle* p= particles->p;
 
-  uint64_t id= (uint64_t) local_ix0*nc*nc + 1;
+  //uint64_t id= (uint64_t) local_ix0*nc*nc + 1;
 
-  const Float D1= cosmology_D_growth(a);
-  const Float Dv= cosmology_Dv_growth(a, D1);
-  long double sum2 = 0.0;
+  //init rng
+  gsl_rng* rng= gsl_rng_alloc(gsl_rng_ranlxd1);
+  gsl_rng_set(rng, seed + 10*comm_this_node());
+  const double sample_rate = np > 0 ? np/pow((double) nc, 3.0) : 1.0;
+
+  // buffer
+  vector<Particle> v;
+  vector<Particle> receive;
+
+  const int n_nodes= comm_n_nodes();
+  cerr << "n_nodes= " << n_nodes << endl;
+  vector<int> nrecv(n_nodes);
+  vector<int> offsets(n_nodes);
+
+  FILE* fp= 0;
+  if(comm_this_node() == 0) {
+    fp = fopen(filename, "w"); assert(fp);
+  }
+    
   
-  Float x[3];
+  const Float D1= cosmology_D_growth(a);
+  //const Float Dv= cosmology_Dv_growth(a, D1);
+  long double sum2 = 0.0;
+
+  Particle p;
+  Float x0[3];
   for(size_t ix=0; ix<local_nx; ix++) {
-    x[0]= (local_ix0 + ix + offset)*dx;
+    v.clear();
+    
+    x0[0]= (local_ix0 + ix + offset)*dx;
     for(size_t iy=0; iy<nc; iy++) {
-      x[1]= (iy + offset)*dx;
+      x0[1]= (iy + offset)*dx;
       for(size_t iz=0; iz<nc; iz++) {
-	x[2]= (iz + offset)*dx;
+	x0[2]= (iz + offset)*dx;
 	
 	size_t index= (ix*nc + iy)*nczr + iz;
 	for(int k=0; k<3; k++) {
 	  Float dis=  psi[k][index];
 	  
-	  p->x[k]= x[k] + D1*dis;
-	  p->v[k]= Dv*dis;
-	  
-	  sum2 += dis*dis;	 
+	  p.x[k]= x0[k] + D1*dis;
+	  //p->v[k]= Dv*dis;	  
 	}
-	p->id= id++;
-	
-	p++;
+
+	if(gsl_rng_uniform(rng) < sample_rate)
+	  v.push_back(p);
       }
     }
+
+    int nbuf= v.size();
+    MPI_Gather(&nbuf, 1, MPI_INT,
+	       nrecv.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    int sum= 0;
+    if(comm_this_node() == 0) {
+      for(int i=0; i<n_nodes; ++i) {
+	offsets[i]= sizeof(Particle)*sum;
+	sum += nrecv[i];
+	printf("receive from %d: %d %d\n", i, nrecv[i], offsets[i]);      
+	nrecv[i] *= sizeof(Particle);
+      }
+      receive.resize(sum);
+    }
+    
+    MPI_Gatherv(v.data(), nbuf*sizeof(Particle), MPI_BYTE,
+		receive.data(), nrecv.data(), offsets.data(),
+		MPI_BYTE, 0, MPI_COMM_WORLD);
+    if(comm_this_node() == 0) {
+      for(int i=0; i<sum; ++i)
+	fprintf(fp, "%le %le %le\n",
+		receive[i].x[0], receive[i].x[1], receive[i].x[2]);
+    }
   }
+
+  if(comm_this_node() == 0)
+    fclose(fp);
   
+  gsl_rng_free(rng);
+    
   double f= cosmology_f_growth_rate(a);
   
   msg_printf(msg_info, "scale_factor  a = %.15le\n", a);
@@ -160,12 +207,14 @@ void lpt_set_displacements(const unsigned long seed, PowerSpectrum* const ps,
 
   msg_printf(msg_verbose, "2LPT displacements calculated.\n");
 
+  /*
   uint64_t nc64= nc;
   
   particles->np_local= np_local;
   particles->np_total= nc64*nc64*nc64;
   particles->a_x= a;
   particles->a_v= a;
+  */
 
 }
 
@@ -207,10 +256,10 @@ void lpt_set_displacements_ngp(const unsigned long seed,
   const Float dx_inv= nc/boxsize;
   Particle* p= particles->p;
 
-  uint64_t id= (uint64_t) local_ix0*nc*nc + 1;
+  //uint64_t id= (uint64_t) local_ix0*nc*nc + 1;
 
   const Float D1= cosmology_D_growth(a);
-  const Float Dv= cosmology_Dv_growth(a, D1);
+  //const Float Dv= cosmology_Dv_growth(a, D1);
   long double sum2 = 0.0;
   
   assert(comm_n_nodes() == 1); // Not MPIzed
@@ -234,11 +283,11 @@ void lpt_set_displacements_ngp(const unsigned long seed,
       Float dis=  psi[k][index];
 	  
       p->x[k]= x[k] + D1*dis;
-      p->v[k]= Dv*dis;
+      //p->v[k]= Dv*dis;
 	  
       sum2 += dis*dis;	 
     }
-    p->id= id++;
+    //p->id= id++;
 	
     p++;
   }
