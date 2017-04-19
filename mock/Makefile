@@ -30,6 +30,8 @@ WOPT    ?= -Wall
 CPPFLAGS  := -O3 $(WOPT) $(OPENMP) $(OPT)
 LIBS    := -lm -lboost_program_options
 
+CPPFLAGS += -DDOUBLEPRECISION
+
 # Define paths of FFTW3 & GSL libraries if necessary.
 
 FFTW3_DIR ?= #e.g. /Users/jkoda/Research/opt/gcc/fftw3
@@ -55,7 +57,7 @@ mock_zeldovich: $(OBJS)
 # LIBS += -llua -ldl 
 LIBS += -lgsl -lgslcblas
 
-ifeq (,$(findstring -DDOUBLEPRECISION, $(OPT)))
+ifeq (,$(findstring -DDOUBLEPRECISION, $(CPPFLAGS)))
   # Single precision FFTW
   FFTWSUF=f
 endif

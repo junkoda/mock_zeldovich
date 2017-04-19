@@ -122,6 +122,7 @@ void lpt_write_displacements(const char filename[],
   gsl_rng* rng= gsl_rng_alloc(gsl_rng_ranlxd1);
   gsl_rng_set(rng, seed + 10*comm_this_node());
   const double sample_rate = np > 0 ? np/pow((double) nc, 3.0) : 1.0;
+  msg_printf(msg_debug, "simpling rate %e\n", sample_rate);
 
   // buffer
   vector<Particle> v;
@@ -175,7 +176,7 @@ void lpt_write_displacements(const char filename[],
       for(int i=0; i<n_nodes; ++i) {
 	offsets[i]= sizeof(Particle)*sum;
 	sum += nrecv[i];
-	printf("receive from %d: %d %d\n", i, nrecv[i], offsets[i]);      
+	//printf("receive from %d: %d %d\n", i, nrecv[i], offsets[i]);      
 	nrecv[i] *= sizeof(Particle);
       }
       receive.resize(sum);
