@@ -45,6 +45,11 @@ int main(int argc, char* argv[])
     ("fix-amplitude", "fix delta amplitude")
     ("lattice", "place unperturbed particles in lattice")
     ("random-ngp", "random unperturbed particles + NGP displacement interpolation")
+    ("offset", value<double>()->default_value(0.5), "offset of initial lattice in units of grid spacing 0 <= offset < 1")
+    ("test-delta", "compute power spectrum from delta(k)")
+    ("test-kpsi", "compute power spectrum from delta(k) = ik.Psi(k)")
+    ("test-fft", "compute power spectrum from delta(k) = ik.Psi(k) with FFT")
+    ("zeldovich-linear", "compute power spectrum from Psi(x) with linear approximation")
     ;
 
   positional_options_description p;
@@ -72,6 +77,9 @@ int main(int argc, char* argv[])
     seed= (unsigned int) time(NULL);
   }
 
+  const double offset= vm["offset"].as<double>();
+  lpt_set_offset(offset);
+
   //printf("seed = %u\n", seed);
   //printf("omega_m = %.4f\n", omega_m);
 
@@ -94,28 +102,30 @@ int main(int argc, char* argv[])
     abort();
     //lpt_set_displacements_ngp(seed, &ps, a, np, fix_amplitude);
   }
+  else if(vm.count("test-delta")) {
+    lpt_test_power_spectrum(ofilename.c_str(),
+			    seed, &ps, fix_amplitude);
+  }
+  else if(vm.count("test-kpsi")) {
+    lpt_test_kpsi(ofilename.c_str(),
+		  seed, &ps, fix_amplitude, false);
+  }
+  else if(vm.count("test-fft")) {
+    lpt_test_kpsi(ofilename.c_str(),
+		  seed, &ps, fix_amplitude, true);
+  }
+  else if(vm.count("zeldovich-linear")) {
+    compute_zeldovich_linear(ofilename.c_str(),
+			     seed, &ps, fix_amplitude);
+  }
+
   else {
     cerr << "Method not specified --lattice or --ngp";
     return 1;
   }
 	
 
-  //FILE* fp;
-  /*
-  if(vm.count("output")) {
-    string filename= vm["output"].as<string>();
-    fp=fopen(filename.c_str(), "w"); assert(fp);
-  }
-  else
-    fp= stdout;
 
-  {
-    size_t n= particles->np_local;
-    Particle const * const p= particles->p;
-    for(size_t i=0; i<n; ++i)
-      fprintf(fp, "%e %e %e\n", p[i].x[0], p[i].x[1], p[i].x[2]);
-  }
-  */
   // Finalize MPI
   comm_mpi_finalise();
 }

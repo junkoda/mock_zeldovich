@@ -25,6 +25,22 @@ void lpt_set_displacements_ngp(const unsigned long seed,
 			       const bool fix_amplitude,
 			       Particles* particles);
 
+void lpt_test_power_spectrum(const char filename[],
+			     const unsigned long seed,
+			     PowerSpectrum* const ps,
+			     const bool fix_amplitude);
+
+void lpt_test_kpsi(const char filename[], 
+		   const unsigned long seed,
+		   PowerSpectrum* const ps,
+		   const bool fix_amplitude,
+		   const bool fft);
+
+void compute_zeldovich_linear(const char filename[], 
+			      const unsigned long seed,
+			      PowerSpectrum* const ps,
+			      const bool fix_amplitude);
+
 
 FFT* lpt_generate_phi(const unsigned long seed, PowerSpectrum* const);
 void lpt_set_offset(Float offset_);

@@ -26,6 +26,7 @@ CorrelationFunction* corr_alloc(vector<double>& r);
 //
 // Global variables
 //
+static const double ktr= 0.005;
 static PowerSpectrum const *p;
 //static CorrelationFunction *psi0, *psi2;
 //static gsl_integration_workspace *w;
@@ -108,7 +109,6 @@ void corr_print(CorrelationFunction const * const psi0,
 void integrate_psi_trapezoidal_r(const double r, double * const psi)
 {
   const int n= p->n;
-  const double ktr= 0.005;
 
   double xi0= 0.0, xi2= 0.0;
   for(int i=1; i<n; ++i) {
@@ -161,7 +161,6 @@ void integrate_psi_hybrid_r(const double r, double * const psi)
   double xi0= 0.0, xi2= 0.0;
 
   const int n= p->n;
-  const double ktr= 0.005;
     
   for(int i=1; i<n; ++i) {
     //Multiply Ptt(k) by k^2 for k<ktr to avoid divergent psi(r)*r^2
@@ -261,23 +260,28 @@ void integrate_psi_hybrid_r(const double r, double * const psi)
 }
 
 void corr_fourier_test(CorrelationFunction const * const psi0,
-		       CorrelationFunction const * const psi2)
+		       CorrelationFunction const * const psi2,
+		       const double k_min, const double k_max)
 {  
   // Fourier transform psi(r) back to P(k)
   printf("# fourier_test\n");
   const size_t n= psi0->n; assert(n > 0);
 
-  for(double k= 0.01; k<1.0; k+=0.01) {
+  for(int i=0; i<p->n; ++i) {
+    double k= p->k[i];
+    if(k < k_min || k > k_max)
+      continue;
+    
     double integ0= 0.0;
     double integ2= 0.0;
-
+    
     for(size_t i=1; i<n; ++i) {
       double kr1= k*psi0->r[i-1];
       double kr2= k*psi0->r[i];
-
+      
       double sinkr1= sin(kr1);
       double coskr1= cos(kr1);
-
+      
       double sinkr2= sin(kr2);
       double coskr2= cos(kr2);
 
@@ -331,14 +335,15 @@ void corr_fourier_test(CorrelationFunction const * const psi0,
 	                 sin_integ0(kr1, sinkr1, coskr1))
 		   + a1*(sin_integ1(kr2, sinkr2, coskr2) -
 			 sin_integ1(kr1, sinkr1, coskr1)));
-      
-
     }
 
     const double fac= 4.0*M_PI/k;
 
-    printf("%e %e %e\n",
+    double fac1= k < ktr ? (k/ktr)*(k/ktr) : 1.0;
+    
+    printf("%e %e %e %e\n",
 	   k,
+	   fac1*p->P[i],
 	   fac*integ0,
 	   fac*integ2);
     // fourier transform back

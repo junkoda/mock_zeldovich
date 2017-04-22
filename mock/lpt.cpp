@@ -18,6 +18,7 @@
 #include "particle.h"
 #include "fft.h"
 #include "lpt.h"
+#include "power_spectrum.h"
 
 using namespace std;
 
@@ -31,6 +32,7 @@ namespace {
   Float offset= 0.5;
 
   FFT* fft_psi[3];    // Zeldovichi displacement Psi_i
+  FFT* fft_delta;
 
   void set_seedtable(const int nc, gsl_rng* random_generator,
 		     unsigned int* const stable);
@@ -38,6 +40,10 @@ namespace {
 			  PowerSpectrum* const,
 			  const int n_mas_correction,
 			  const int fix_amplitude);
+
+  void lpt_generate_delta_k(const unsigned long seed,
+			    PowerSpectrum* const ps,
+			    const int fix_amplitude);
 }
 
 void lpt_init(const int nc_, const double boxsize_, Mem* mem)
@@ -56,6 +62,8 @@ void lpt_init(const int nc_, const double boxsize_, Mem* mem)
   
   for(int i=0; i<3; i++)
     fft_psi[i]= new FFT("Psi_i", nc, mem, 0);
+
+  fft_delta= new FFT("delta", nc, 0, 0);
 
   
   seedtable = (unsigned int *) malloc(nc*nc*sizeof(unsigned int));
@@ -82,6 +90,169 @@ void lpt_free()
 
   nc= 0;
 }
+
+void lpt_test_power_spectrum(const char filename[],
+			     const unsigned long seed,
+			     PowerSpectrum* const ps,
+			     const bool fix_amplitude)
+{
+  // Not MPI parallelised
+  assert(comm_n_nodes() == 1);
+
+  lpt_generate_delta_k(seed, ps, fix_amplitude);
+
+  compute_power_spectrum(filename,
+			 fft_psi[0]->fk, fft_psi[0]->nc,
+			 boxsize, 0.0, 1.0, 0.01,
+			 false);
+}
+
+void lpt_test_kpsi(const char filename[], 
+		   const unsigned long seed,
+		   PowerSpectrum* const ps,
+		   const bool fix_amplitude,
+		   const bool fft)
+{
+  // Test the accuracy of delta_k = ik.Psi
+  
+  // Not MPI parallelised
+  assert(comm_n_nodes() == 1);
+    
+
+  if(nc == 0 || seedtable == 0) {
+    msg_printf(msg_error,
+	       "Error: lpt_init() not called before lpt_set_displacements");
+    return;
+  }
+  
+  msg_printf(msg_verbose, "TEST FFT\n");
+  lpt_generate_psi_k(seed, ps, 0, fix_amplitude);
+
+  // Convert Psi_k to realspace
+  if(fft) {
+    msg_printf(msg_verbose, "Fourier transforming Zeldovich displacements\n");
+    for(int i=0; i<3; i++) {
+      fft_psi[i]->execute_inverse();
+    }
+
+    msg_printf(msg_verbose, "FFT back to Fourier space\n");
+    for(int i=0; i<3; i++) {
+      fft_psi[i]->execute_forward();
+    }
+  }
+
+
+  complex_t* psi[]=  {fft_psi[0]->fk, fft_psi[1]->fk, fft_psi[2]->fk};
+
+  //const size_t nczr= 2*(nc/2 + 1);
+  //const Float dx= boxsize/nc;
+  const size_t ncz= nc/2 + 1;
+
+  const double fac= 2.0*M_PI/boxsize;   // fundamental frequency
+  double psi_fac= pow(boxsize, 1.5);
+  if(fft)
+    psi_fac /= (nc*nc*nc);
+
+  // delta(k) = k.Psi (neglicting i in ik.Psi)
+  for(int ix=0; ix<nc; ++ix) {
+   double kx= ix <= nc/2 ? fac*ix : fac*(ix - (int) nc);
+
+   for(int iy=0; iy<nc; ++iy) {
+    double ky= iy <= nc/2 ? fac*iy : fac*(iy - (int) nc);
+    
+    //int iz0 = !(kx > 0.0 || (kx == 0.0 && ky > 0.0));
+
+    for(int iz=0; iz<nc/2+1; ++iz) {
+      double kz= fac*iz;
+      size_t index= (ix*nc + iy)*ncz + iz;
+
+      psi[0][index][0]  = psi_fac*kx*psi[0][index][0];
+      psi[0][index][1]  = psi_fac*kx*psi[0][index][1];
+      psi[0][index][0] += psi_fac*ky*psi[1][index][0];
+      psi[0][index][1] += psi_fac*ky*psi[1][index][1];
+      psi[0][index][0] += psi_fac*kz*psi[2][index][0];
+      psi[0][index][1] += psi_fac*kz*psi[2][index][1];
+    }
+   }
+  }
+
+  compute_power_spectrum(filename,
+			 fft_psi[0]->fk, nc,
+			 boxsize, 0.0, 1.0, 0.01,
+			 false);
+
+}
+
+void compute_zeldovich_linear(const char filename[], 
+			      const unsigned long seed,
+			      PowerSpectrum* const ps,
+			      const bool fix_amplitude)
+{
+  // Compute power spectrum of lienarised Zeldovich approximation
+  
+  // Not MPI parallelised
+  assert(comm_n_nodes() == 1);
+    
+
+  if(nc == 0 || seedtable == 0) {
+    msg_printf(msg_error,
+	       "Error: lpt_init() not called before lpt_set_displacements");
+    return;
+  }
+  
+  msg_printf(msg_verbose, "Zeldovich linear\n");
+  lpt_generate_psi_k(seed, ps, 0, fix_amplitude);
+
+  // Convert Psi_k to realspace
+  msg_printf(msg_verbose, "Fourier transforming Zeldovich displacements\n");
+  for(int i=0; i<3; i++) {
+    fft_psi[i]->execute_inverse();
+  }
+
+  const Float dx_inv= nc/boxsize;
+  const size_t ncz= 2*(nc/2 + 1);
+
+  Float* delta = fft_delta->fx;
+  Float* psi[]=  {fft_psi[0]->fx, fft_psi[1]->fx, fft_psi[2]->fx};
+
+  double psi_fac= pow(boxsize, 1.5)/(nc*nc*nc);
+
+  
+  for(int ix=0; ix<nc; ++ix) {
+    int ix1= (ix + 1) % nc;
+    for(int iy=0; iy<nc; ++iy) {
+      int iy1= (iy + 1) % nc;
+      for(int iz=0; iz<nc; ++iz) {
+	int iz1= (iz + 1) % nc;
+
+	size_t index=  (ix *nc + iy )*ncz + iz;
+
+	size_t index0= (ix1*nc + iy )*ncz + iz;
+	size_t index1= (ix *nc + iy1)*ncz + iz;
+	size_t index2= (ix *nc + iy )*ncz + iz1;
+
+	double d0= (psi[0][index] - psi[0][index0])*dx_inv;
+	double d1= (psi[1][index] - psi[1][index1])*dx_inv;
+	double d2= (psi[2][index] - psi[2][index2])*dx_inv;
+
+	delta[index] = psi_fac*(d0 + d1 + d2);
+      }
+    }
+  }
+
+  fft_delta->mode= fft_mode_x;
+	
+  msg_printf(msg_verbose, "FFT delta to Fourier space\n");
+  fft_delta->execute_forward();
+  
+  compute_power_spectrum(filename,
+			 fft_delta->fk, nc,
+			 boxsize, 0.0, 1.0, 0.01,
+			 true);
+
+  msg_printf(msg_verbose, "Linearlised Zeldovich power spectrum written\n");
+}
+
 
 
 void lpt_write_displacements(const char filename[], 
@@ -319,6 +490,7 @@ void lpt_set_displacements_ngp(const unsigned long seed,
 void lpt_set_offset(Float offset_)
 {
   offset= offset_;
+  msg_printf(msg_info, "offset set to %e\n", offset);
 }
 
 namespace {
@@ -419,8 +591,6 @@ void lpt_generate_psi_k(const unsigned long seed,
     else
       kvec[0]= -dk*(nc - ix);
 
-    //double w_x= w(sin_fac*kvec[0]);
-
     if(!((local_ix0 <= ix  && ix  < (local_ix0 + local_nx)) ||
 	 (local_ix0 <= iix && iix < (local_ix0 + local_nx))))
       continue;
@@ -433,8 +603,6 @@ void lpt_generate_psi_k(const unsigned long seed,
       else
 	kvec[1]= -dk*(nc - iy);
 
-      //double w_xy= w_x*w(sin_fac*kvec[1]);
-      
       for(size_t iz=0; iz<nc/2; iz++) {
 	double phase= gsl_rng_uniform(random_generator)*2*M_PI;
 	double ampl;
@@ -453,8 +621,6 @@ void lpt_generate_psi_k(const unsigned long seed,
 	else
 	  kvec[2]= -dk*(nc - iz);
 
-	//double w_xyz= w_xy*w(sin_fac*kvec[2]);
-	
 	double kmag2 = kvec[0]*kvec[0] + kvec[1]*kvec[1] + kvec[2]*kvec[2];
 	double kmag = sqrt(kmag2);
 	
@@ -545,6 +711,167 @@ void lpt_generate_psi_k(const unsigned long seed,
   for(int i=0; i<3; ++i) {
     fft_psi[i]->mode= fft_mode_k;
   }
+  
+  gsl_rng_free(random_generator);  
+}
+
+
+void lpt_generate_delta_k(const unsigned long seed,
+			  PowerSpectrum* const ps,
+			  const int fix_amplitude)
+{
+  // Generates delta(k)
+  msg_printf(msg_verbose, "Generating delta_k...\n");
+  msg_printf(msg_info, "Random Seed = %lu\n", seed);
+
+  for(int i=0; i<3; i++) assert(fft_psi[i]);
+  
+  complex_t* psi_k[]= {fft_psi[0]->fk, fft_psi[1]->fk, fft_psi[2]->fk};
+
+  const size_t nckz= nc/2 + 1;
+  const double dk= 2.0*M_PI/boxsize;
+  const double knq= nc*M_PI/boxsize; // Nyquist frequency
+  //const double fac= pow(2*M_PI/boxsize, 1.5);
+  //const double fac_2pi3= 1.0/(8.0*M_PI*M_PI*M_PI);
+  
+  gsl_rng* random_generator = gsl_rng_alloc(gsl_rng_ranlxd1);
+  gsl_rng_set(random_generator, seed);
+  set_seedtable(nc, random_generator, seedtable);
+
+  
+  // clean the delta_k grid
+  for(size_t ix=0; ix<local_nx; ix++)
+   for(size_t iy=0; iy<nc; iy++)
+    for(size_t iz=0; iz<nckz; iz++) {
+      size_t index= (ix*nc + iy)*nckz + iz;
+      psi_k[0][index][0] = 0;
+      psi_k[0][index][1] = 0;
+    }
+
+  double kvec[3];
+  for(size_t ix=0; ix<nc; ix++) {
+    size_t iix = nc - ix;
+    if(iix == nc)
+      iix = 0;
+
+    if(ix < nc/2)
+      kvec[0]= dk*ix;
+    else
+      kvec[0]= -dk*(nc - ix);
+
+    if(!((local_ix0 <= ix  && ix  < (local_ix0 + local_nx)) ||
+	 (local_ix0 <= iix && iix < (local_ix0 + local_nx))))
+      continue;
+    
+    for(size_t iy=0; iy<nc; iy++) {
+      gsl_rng_set(random_generator, seedtable[ix*nc + iy]);
+
+      if(iy < nc/2)
+	kvec[1]= dk*iy;
+      else
+	kvec[1]= -dk*(nc - iy);
+
+      for(size_t iz=0; iz<nc/2; iz++) {
+	double phase= gsl_rng_uniform(random_generator)*2*M_PI;
+	double ampl;
+	do
+	  ampl = gsl_rng_uniform(random_generator);
+	while(ampl == 0.0);
+
+
+	if(ix == nc/2 || iy == nc/2 || iz == nc/2)
+	  continue;
+	if(ix == 0 && iy == 0 && iz == 0)
+	  continue;
+	
+	if(iz < nc/2)
+	  kvec[2]= dk*iz;
+	else
+	  kvec[2]= -dk*(nc - iz);
+
+	double kmag2 = kvec[0]*kvec[0] + kvec[1]*kvec[1] + kvec[2]*kvec[2];
+	double kmag = sqrt(kmag2);
+	
+#ifdef SPHEREMODE
+	// select a sphere in k-space
+	if(kmag > knq)
+	  continue;
+#else
+	if(fabs(kvec[0]) > knq)
+	  continue;
+	if(fabs(kvec[1]) > knq)
+	  continue;
+	if(fabs(kvec[2]) > knq)
+	  continue;
+#endif
+
+	double delta2;
+	if(fix_amplitude)
+	  delta2= ps->P(kmag);
+	  //delta2= fac_2pi3*ps->P(kmag);
+	else
+	  delta2= -log(ampl)*ps->P(kmag);
+	  //delta2= -log(ampl)*fac_2pi3*ps->P(kmag);
+	
+	//double delta_k_mag= fac*sqrt(delta2); ///pow(w_xyz, n_mas_correction);
+	double delta_k_mag= sqrt(delta2); ///pow(w_xyz, n_mas_correction);
+	// delta_k_mag -- |delta_k| extrapolated to a=1
+	// Displacement is extrapolated to a=1
+
+	if(iz > 0) {
+	  if(local_ix0 <= ix && ix < (local_ix0 + local_nx)) {
+	    size_t index= ((ix - local_ix0)*nc + iy)*nckz + iz;
+	    psi_k[0][index][0]= delta_k_mag*cos(phase);
+	    psi_k[0][index][1]= delta_k_mag*sin(phase);
+	  }
+	}
+	else { // k=0 plane needs special treatment
+	  if(ix == 0) {
+	    if(iy >= nc/2)
+	      continue;
+	    else {
+	      if(local_ix0 <= ix && ix < (local_ix0 + local_nx)) {
+		size_t iiy= nc - iy; // note: j!=0 surely holds at this point
+		size_t index= ((ix - local_ix0)*nc + iy)*nckz + iz;				size_t iindex= ((ix - local_ix0)*nc + iiy)*nckz + iz;
+		
+		psi_k[0][index][0]=  delta_k_mag*cos(phase);
+		psi_k[0][index][1]=  delta_k_mag*sin(phase);
+		  
+		psi_k[0][iindex][0]= delta_k_mag*cos(phase);
+		psi_k[0][iindex][1]= delta_k_mag*sin(phase);
+	      }
+	    }
+	  }
+	  else { // here comes i!=0 : conjugate can be on other processor!
+	    if(ix >= nc/2)
+	      continue;
+	    else {
+	      iix = nc - ix;
+	      if(iix == nc)
+		iix = 0;
+	      int iiy = nc - iy;
+	      if((size_t) iiy == nc)
+		iiy = 0;
+	      
+	      if(local_ix0 <= ix && ix < (local_ix0 + local_nx)) {
+		size_t index= ((ix - local_ix0)*nc + iy)*nckz + iz;
+		psi_k[0][index][0]= delta_k_mag*cos(phase);
+		psi_k[0][index][1]= delta_k_mag*sin(phase);
+	      }
+	      
+	      if(local_ix0 <= iix && iix < (local_ix0 + local_nx)) {
+		size_t index= ((iix - local_ix0)*nc + iiy)*nckz + iz;
+		psi_k[0][index][0]= delta_k_mag*cos(phase);
+		psi_k[0][index][1]= delta_k_mag*sin(phase);
+	      }
+	    }
+	  }
+	}
+      }
+    }
+  }
+
+  fft_psi[0]->mode= fft_mode_k;
   
   gsl_rng_free(random_generator);  
 }

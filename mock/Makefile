@@ -46,7 +46,8 @@ LIBS      += $(foreach dir, $(DIR_PATH), -L$(dir)/lib)
 
 OBJS := mock_zeldovich.o
 OBJS += comm.o msg.o config.o fft.o mem.o particle.o util.o
-OBJS += power.o cosmology.o lpt.o 
+OBJS += power.o cosmology.o lpt.o
+OBJS += power_spectrum.o
 
 mock_zeldovich: $(OBJS)
 	$(CXX) $(OBJS) $(LIBS) -o $@

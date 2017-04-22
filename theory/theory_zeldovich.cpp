@@ -89,19 +89,20 @@ int main(int argc, char* argv[])
     = corr_compute_psi(ps, vr);
   CorrelationFunction const * const psi0= psi[0];
   CorrelationFunction const * const psi2= psi[1];
-  
+
+    const double k_min= vm["kmin"].as<double>();
+    const double k_max= vm["kmax"].as<double>();
+
 
   if(vm.count("print-psi")) {
     corr_print(psi0, psi2);
     return 0;
   }
   else if(vm.count("test")) {
-    corr_fourier_test(psi0, psi2);
+    corr_fourier_test(psi0, psi2, k_min, k_max);
     return 0;
   }
 
-  const double k_min= vm["kmin"].as<double>();
-  const double k_max= vm["kmax"].as<double>();
   
   for(int i=0; i<ps->n; ++i) {
     double k= ps->k[i];

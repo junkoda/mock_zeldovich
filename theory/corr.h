@@ -25,7 +25,8 @@ void corr_print(CorrelationFunction const * const psi0,
 		CorrelationFunction const * const psi2);
 
 void corr_fourier_test(CorrelationFunction const * const psi0,
-		       CorrelationFunction const * const psi2);
+		       CorrelationFunction const * const psi2,
+		       const double k_min, const double k_max);
 
 //void corr_print();
 

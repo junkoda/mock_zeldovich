@@ -80,23 +80,29 @@ FFT::~FFT()
 void FFT::execute_forward()
 {
   if(mode != fft_mode_x) {
-    msg_printf(msg_warn,
-	       "Warning: FFT %s mode is %d not %d for execute_forward\n",
-	       name, mode, fft_mode_x);
+    cerr << "Error: grid is not in real space to execute FFT forward\n";
+    //msg_printf(msg_warn,
+    //	       "Warning: FFT %s mode is %d not %d for execute_forward\n",
+    //	       name, mode, fft_mode_x);
     throw FFTError();
   }
   FFTW(mpi_execute_dft_r2c)(forward_plan, fx, fk);
+
+  mode = fft_mode_k;
 }
 
 void FFT::execute_inverse()
 {
   if(mode != fft_mode_k) {
-    msg_printf(msg_warn,
-	       "Warning: FFT %s mode is %d not %d for execute_inverse\n",
-	       name, mode, fft_mode_x);
+    cerr << "Error: grid is not in Fourier space to execute FFT inverse\n";
+    //msg_printf(msg_warn,
+    //"Warning: FFT %s mode is %d not %d for execute_inverse\n",
+    //name, mode, fft_mode_x);
     throw FFTError();
   }
   FFTW(mpi_execute_dft_c2r)(inverse_plan, fk, fx);
+
+  mode = fft_mode_x;
 }
 
 
