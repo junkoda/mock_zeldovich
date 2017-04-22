@@ -2,7 +2,7 @@
 
 LATEX = pdflatex
 
-doc: mock_zeldovich.pdf
+doc: mock_zeldovich.pdf linear_zeldovich.pdf
 
 %.pdf: %.tex
 	$(LATEX) $<
