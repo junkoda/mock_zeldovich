@@ -50,6 +50,7 @@ int main(int argc, char* argv[])
     ("test-kpsi", "compute power spectrum from delta(k) = ik.Psi(k)")
     ("test-fft", "compute power spectrum from delta(k) = ik.Psi(k) with FFT")
     ("zeldovich-linear", "compute power spectrum from Psi(x) with linear approximation")
+    ("zeldovich-nonlinear", "compute power spectrum from Psi(x) with linear approximation")
     ;
 
   positional_options_description p;
@@ -116,9 +117,12 @@ int main(int argc, char* argv[])
   }
   else if(vm.count("zeldovich-linear")) {
     compute_zeldovich_linear(ofilename.c_str(),
-			     seed, &ps, fix_amplitude);
+			     seed, &ps, a, fix_amplitude);
   }
-
+  else if(vm.count("zeldovich-nonlinear")) {
+    compute_zeldovich_nonlinear(ofilename.c_str(),
+			     seed, &ps, a, fix_amplitude);
+  }
   else {
     cerr << "Method not specified --lattice or --ngp";
     return 1;

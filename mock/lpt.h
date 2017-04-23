@@ -39,7 +39,18 @@ void lpt_test_kpsi(const char filename[],
 void compute_zeldovich_linear(const char filename[], 
 			      const unsigned long seed,
 			      PowerSpectrum* const ps,
+			      const double a,
 			      const bool fix_amplitude);
+
+void compute_zeldovich_nonlinear(const char filename[], 
+			      const unsigned long seed,
+			      PowerSpectrum* const ps,
+				 const double a,
+				 const bool fix_amplitude);
+
+void write_grid_real(const char filename[], FFT const * const fft);
+void write_psi_real(const char filename[]);
+
 
 
 FFT* lpt_generate_phi(const unsigned long seed, PowerSpectrum* const);

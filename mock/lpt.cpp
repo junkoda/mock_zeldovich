@@ -44,7 +44,14 @@ namespace {
   void lpt_generate_delta_k(const unsigned long seed,
 			    PowerSpectrum* const ps,
 			    const int fix_amplitude);
+
+
+  inline size_t idx(const int ix, const int iy, const int iz) {
+    return 2*(nc/2 + 1)*(nc*ix + iy) + iz;
+  }
+
 }
+
 
 void lpt_init(const int nc_, const double boxsize_, Mem* mem)
 {
@@ -186,6 +193,7 @@ void lpt_test_kpsi(const char filename[],
 void compute_zeldovich_linear(const char filename[], 
 			      const unsigned long seed,
 			      PowerSpectrum* const ps,
+			      const double a,
 			      const bool fix_amplitude)
 {
   // Compute power spectrum of lienarised Zeldovich approximation
@@ -215,16 +223,62 @@ void compute_zeldovich_linear(const char filename[],
   Float* delta = fft_delta->fx;
   Float* psi[]=  {fft_psi[0]->fx, fft_psi[1]->fx, fft_psi[2]->fx};
 
-  double psi_fac= pow(boxsize, 1.5)/(nc*nc*nc);
+  const Float D1= cosmology_D_growth(a);
+  const double psi_fac= pow(boxsize, 1.5)/(nc*nc*nc);
 
+  msg_printf(msg_info, "scale_factor  a = %.15le\n", a);
+  msg_printf(msg_info, "growth factor D= %.15le\n", D1);
+
+
+  size_t ix0[3], ix1[3];
   
   for(int ix=0; ix<nc; ++ix) {
-    int ix1= (ix + 1) % nc;
+    ix0[0]= ix;
+    ix1[0]= (ix + 1) % nc;
     for(int iy=0; iy<nc; ++iy) {
-      int iy1= (iy + 1) % nc;
+      ix0[1]= iy;
+      ix1[1]= (iy + 1) % nc;
       for(int iz=0; iz<nc; ++iz) {
-	int iz1= (iz + 1) % nc;
+	ix0[2]= iz;
+	ix1[2]= (iz + 1) % nc;
 
+	double d= 0.0;
+	d +=   D1*psi[0][idx(ix0[0], ix0[1], ix0[2])]*dx_inv 
+	     + D1*psi[1][idx(ix0[0], ix0[1], ix0[2])]*dx_inv 
+	     + D1*psi[2][idx(ix0[0], ix0[1], ix0[2])]*dx_inv;
+
+	d += - D1*psi[0][idx(ix1[0], ix0[1], ix0[2])]*dx_inv 
+	     + D1*psi[1][idx(ix1[0], ix0[1], ix0[2])]*dx_inv 
+	     + D1*psi[2][idx(ix1[0], ix0[1], ix0[2])]*dx_inv;
+
+	d +=   D1*psi[0][idx(ix0[0], ix1[1], ix0[2])]*dx_inv
+	     - D1*psi[1][idx(ix0[0], ix1[1], ix0[2])]*dx_inv
+	     + D1*psi[2][idx(ix0[0], ix1[1], ix0[2])]*dx_inv;
+
+	d += - D1*psi[0][idx(ix1[0], ix1[1], ix0[2])]*dx_inv
+	     - D1*psi[1][idx(ix1[0], ix1[1], ix0[2])]*dx_inv
+	     + D1*psi[2][idx(ix1[0], ix1[1], ix0[2])]*dx_inv;
+
+	d +=   D1*psi[0][idx(ix0[0], ix0[1], ix1[2])]*dx_inv
+	     + D1*psi[1][idx(ix0[0], ix0[1], ix1[2])]*dx_inv
+	     - D1*psi[2][idx(ix0[0], ix0[1], ix1[2])]*dx_inv;
+
+	d += - D1*psi[0][idx(ix1[0], ix0[1], ix1[2])]*dx_inv
+	     + D1*psi[1][idx(ix1[0], ix0[1], ix1[2])]*dx_inv
+	     - D1*psi[2][idx(ix1[0], ix0[1], ix1[2])]*dx_inv;
+
+	d +=   D1*psi[0][idx(ix0[0], ix1[1], ix1[2])]*dx_inv
+	     - D1*psi[1][idx(ix0[0], ix1[1], ix1[2])]*dx_inv
+	     - D1*psi[2][idx(ix0[0], ix1[1], ix1[2])]*dx_inv;
+
+	d += - D1*psi[0][idx(ix1[0], ix1[1], ix1[2])]*dx_inv
+	     - D1*psi[1][idx(ix1[0], ix1[1], ix1[2])]*dx_inv
+	     - D1*psi[2][idx(ix1[0], ix1[1], ix1[2])]*dx_inv;
+
+	size_t grid_index= (ix *nc + iy )*ncz + iz;
+	delta[grid_index] = psi_fac*d/4;
+
+	/*
 	size_t index=  (ix *nc + iy )*ncz + iz;
 
 	size_t index0= (ix1*nc + iy )*ncz + iz;
@@ -236,6 +290,7 @@ void compute_zeldovich_linear(const char filename[],
 	double d2= (psi[2][index] - psi[2][index2])*dx_inv;
 
 	delta[index] = psi_fac*(d0 + d1 + d2);
+	*/
       }
     }
   }
@@ -248,9 +303,193 @@ void compute_zeldovich_linear(const char filename[],
   compute_power_spectrum(filename,
 			 fft_delta->fk, nc,
 			 boxsize, 0.0, 1.0, 0.01,
-			 true);
+			 2);
 
   msg_printf(msg_verbose, "Linearlised Zeldovich power spectrum written\n");
+}
+
+
+void compute_zeldovich_nonlinear(const char filename[], 
+			      const unsigned long seed,
+			      PowerSpectrum* const ps,
+				 const double a,
+			      const bool fix_amplitude)
+{
+  // Compute power spectrum of lienarised Zeldovich approximation
+  
+  // Not MPI parallelised
+  assert(comm_n_nodes() == 1);
+    
+
+  if(nc == 0 || seedtable == 0) {
+    msg_printf(msg_error,
+	       "Error: lpt_init() not called before lpt_set_displacements");
+    return;
+  }
+  
+  msg_printf(msg_verbose, "Zeldovich nonlinear\n");
+  lpt_generate_psi_k(seed, ps, 0, fix_amplitude);
+
+  // Convert Psi_k to realspace
+  msg_printf(msg_verbose, "Fourier transforming Zeldovich displacements\n");
+  for(int i=0; i<3; i++) {
+    fft_psi[i]->execute_inverse();
+  }
+
+  const Float dx= boxsize/nc;
+  const Float dx_inv= nc/boxsize;
+  const size_t ncz= 2*(nc/2 + 1);
+  size_t count= 0;
+
+  Float* delta = fft_delta->fx;
+  Float* psi[]=  {fft_psi[0]->fx, fft_psi[1]->fx, fft_psi[2]->fx};
+
+  const Float D1= cosmology_D_growth(a);
+  double psi_fac= pow(boxsize, 1.5)/(nc*nc*nc);
+
+  msg_printf(msg_info, "scale_factor  a = %.15le\n", a);
+  msg_printf(msg_info, "growth factor D= %.15le\n", D1);
+
+  long double sum[]= {0.0, 0.0, 0.0};
+
+  size_t ix0[3], ix1[3];
+  
+  for(int ix=0; ix<nc; ++ix) {
+    ix0[0]= ix;
+    ix1[0]= (ix + 1) % nc;
+    for(int iy=0; iy<nc; ++iy) {
+      ix0[1]= iy;
+      ix1[1]= (iy + 1) % nc;
+      for(int iz=0; iz<nc; ++iz) {
+	ix0[2]= iz;
+	ix1[2]= (iz + 1) % nc;
+
+	/*
+	double del[8][3];
+	for(int ii=0; ii<2; ++ii) {
+	  int ix0 = (ix + ii) % nc;
+	  for(int jj=0; jj<2; ++jj) {
+	    int iy0= (iy + jj) % nc;
+	    for(int kk=0; kk<2; ++kk) {
+	      int iz0= (iz + kk) % nc;
+	      size_t psi_index= (ix0*nc + iy0)*nc + iz0;
+	      del[ii + 2*jj + 4*kk][0]= D1*psi[0][psi_index]*dx_inv;
+	      del[ii + 2*jj + 4*kk][1]= D1*psi[1][psi_index]*dx_inv;
+	      del[ii + 2*jj + 4*kk][2]= D1*psi[2][psi_index]*dx_inv;
+	    }
+	  }
+	}
+	*/
+
+	double d= 0.0;
+	d += (0.5 + D1*psi[0][idx(ix0[0], ix0[1], ix0[2])]*dx_inv)*
+	     (0.5 + D1*psi[1][idx(ix0[0], ix0[1], ix0[2])]*dx_inv)*
+	     (0.5 + D1*psi[2][idx(ix0[0], ix0[1], ix0[2])]*dx_inv);
+
+	d += (0.5 - D1*psi[0][idx(ix1[0], ix0[1], ix0[2])]*dx_inv)*
+	     (0.5 + D1*psi[1][idx(ix1[0], ix0[1], ix0[2])]*dx_inv)*
+	     (0.5 + D1*psi[2][idx(ix1[0], ix0[1], ix0[2])]*dx_inv);
+
+	d += (0.5 + D1*psi[0][idx(ix0[0], ix1[1], ix0[2])]*dx_inv)*
+	     (0.5 - D1*psi[1][idx(ix0[0], ix1[1], ix0[2])]*dx_inv)*
+	     (0.5 + D1*psi[2][idx(ix0[0], ix1[1], ix0[2])]*dx_inv);
+
+	d += (0.5 - D1*psi[0][idx(ix1[0], ix1[1], ix0[2])]*dx_inv)*
+	     (0.5 - D1*psi[1][idx(ix1[0], ix1[1], ix0[2])]*dx_inv)*
+	     (0.5 + D1*psi[2][idx(ix1[0], ix1[1], ix0[2])]*dx_inv);
+
+	d += (0.5 + D1*psi[0][idx(ix0[0], ix0[1], ix1[2])]*dx_inv)*
+	     (0.5 + D1*psi[1][idx(ix0[0], ix0[1], ix1[2])]*dx_inv)*
+	     (0.5 - D1*psi[2][idx(ix0[0], ix0[1], ix1[2])]*dx_inv);
+
+	d += (0.5 - D1*psi[0][idx(ix1[0], ix0[1], ix1[2])]*dx_inv)*
+	     (0.5 + D1*psi[1][idx(ix1[0], ix0[1], ix1[2])]*dx_inv)*
+	     (0.5 - D1*psi[2][idx(ix1[0], ix0[1], ix1[2])]*dx_inv);
+
+	d += (0.5 + D1*psi[0][idx(ix0[0], ix1[1], ix1[2])]*dx_inv)*
+	     (0.5 - D1*psi[1][idx(ix0[0], ix1[1], ix1[2])]*dx_inv)*
+	     (0.5 - D1*psi[2][idx(ix0[0], ix1[1], ix1[2])]*dx_inv);
+
+	d += (0.5 - D1*psi[0][idx(ix1[0], ix1[1], ix1[2])]*dx_inv)*
+	     (0.5 - D1*psi[1][idx(ix1[0], ix1[1], ix1[2])]*dx_inv)*
+	     (0.5 - D1*psi[2][idx(ix1[0], ix1[1], ix1[2])]*dx_inv);
+
+
+	/*
+	double d= 0.0;
+	d += (0.5 + del[0][0])*(0.5 + del[0][1])*(0.5 + del[0][2]);
+	d += (0.5 - del[1][0])*(0.5 + del[1][1])*(0.5 + del[1][2]);
+	d += (0.5 + del[2][0])*(0.5 - del[2][1])*(0.5 + del[2][2]);
+	d += (0.5 - del[3][0])*(0.5 - del[3][1])*(0.5 + del[3][2]);
+	d += (0.5 + del[4][0])*(0.5 + del[4][1])*(0.5 - del[4][2]);
+	d += (0.5 - del[5][0])*(0.5 + del[5][1])*(0.5 - del[5][2]);
+	d += (0.5 + del[6][0])*(0.5 - del[6][1])*(0.5 - del[6][2]);
+	d += (0.5 - del[7][0])*(0.5 - del[7][1])*(0.5 - del[7][2]);
+	*/
+	
+	// grid index
+	size_t grid_index= (ix *nc + iy )*ncz + iz;
+	delta[grid_index] = psi_fac*(d - 1.0);
+
+	// Statistics
+	for(int k=0; k<3; ++k) {
+	  double del= D1*psi[k][grid_index];
+	  sum[k] += del*del;
+	  if(abs(del) > dx)
+	    count++;
+	}
+	
+	//double d0= D1*(psi[0][index] - psi[0][index0])*dx_inv;
+	//double d1= D1*(psi[1][index] - psi[1][index1])*dx_inv;
+	//double d2= D1*(psi[2][index] - psi[2][index2])*dx_inv;
+
+	//DEBUG!!!
+	//delta[index]= psi_fac*(d0 + d1 + d2);
+	//delta[index] = (1.0 + d0)*(1.0 + d1)*(1.0 + d2) - 1.0;
+	//delta[index] = psi_fac*((1.0 + d0)*(1.0 + d1)*(1.0 + d2) - 1.0);
+
+	fprintf(stderr, "%d %d %d %.15le %.15le %.15le\n",
+		ix, iy, iz,
+		psi[0][grid_index],
+		psi[1][grid_index],
+		psi[2][grid_index]);
+
+      }
+    }
+  }
+
+  for(int k=0; k<3; ++k) {
+    double rms= sqrt(sum[k]/(nc*nc*nc));
+    msg_printf(msg_info, "psi rms %e %e\n", rms, rms*dx_inv);
+  }
+
+  msg_printf(msg_info, "|psi| > dx %zu fraction %e\n",
+	     count,
+	     (double) count/(3*nc*nc*nc));
+
+
+
+  fft_delta->mode= fft_mode_x;
+
+  //char gfilename[64];
+  //sprintf(gfilename, "grid_zeldovich_nonlinear_%zu.b", nc);
+  //write_grid_real(gfilename, fft_delta);
+
+  //sprintf(gfilename, "psi_zeldovich_nonlinear_%zu.b", nc);
+  //write_psi_real(gfilename);
+
+
+  
+	
+  msg_printf(msg_verbose, "FFT delta to Fourier space\n");
+  fft_delta->execute_forward();
+  
+  compute_power_spectrum(filename,
+			 fft_delta->fk, nc,
+			 boxsize, 0.0, 1.0, 0.01,
+			 2);
+
+  msg_printf(msg_verbose, "Nonlinear Zeldovich power spectrum written\n");
 }
 
 
@@ -293,7 +532,7 @@ void lpt_write_displacements(const char filename[],
   gsl_rng* rng= gsl_rng_alloc(gsl_rng_ranlxd1);
   gsl_rng_set(rng, seed + 10*comm_this_node());
   const double sample_rate = np > 0 ? np/pow((double) nc, 3.0) : 1.0;
-  msg_printf(msg_debug, "simpling rate %e\n", sample_rate);
+  msg_printf(msg_debug, "sampling rate %e\n", sample_rate);
 
   // buffer
   vector<Particle> v;
@@ -358,7 +597,7 @@ void lpt_write_displacements(const char filename[],
 		MPI_BYTE, 0, MPI_COMM_WORLD);
     if(comm_this_node() == 0) {
       for(int i=0; i<sum; ++i)
-	fprintf(fp, "%le %le %le\n",
+	fprintf(fp, "%.15le %.15le %.15le\n",
 		receive[i].x[0], receive[i].x[1], receive[i].x[2]);
     }
   }
@@ -1033,4 +1272,53 @@ void lpt_compute_psi2_k(void)
 }
 */
 
+
+}
+
+void write_grid_real(const char filename[], FFT const * const fft)
+{
+  int nc= fft->nc;
+  int ncz= 2*(nc/2 + 1);
+  Float* p= fft->fx;
+  
+  FILE* fp= fopen(filename, "w");
+  fwrite(&nc, sizeof(int), 1, fp);
+
+  for(int ix=0; ix<nc; ix++) {
+    for(int iy=0; iy<nc; ++iy) {
+      fwrite(p, sizeof(Float), nc, fp);
+      p += ncz;
+    }
+  }
+  
+  fwrite(&nc, sizeof(int), 1, fp);
+  
+
+  fclose(fp);
+  msg_printf(msg_info, "Grid file %s written.\n", filename);
+}
+
+void write_psi_real(const char filename[])
+{
+  size_t ncz= 2*(nc/2 + 1);
+  
+  FILE* fp= fopen(filename, "w");
+  fwrite(&nc, sizeof(int), 1, fp);
+
+  for(int ix=0; ix<nc; ix++) {
+    for(int iy=0; iy<nc; ++iy) {
+      for(int iz=0; iz<nc; ++iz) {
+	size_t index = (ix*nc + iy)*ncz;
+	fwrite(&fft_psi[0]->fx[index], sizeof(Float), 1, fp);
+	fwrite(&fft_psi[1]->fx[index], sizeof(Float), 1, fp);
+	fwrite(&fft_psi[2]->fx[index], sizeof(Float), 1, fp);
+      }
+    }
+  }
+  
+  fwrite(&nc, sizeof(int), 1, fp);
+  
+
+  fclose(fp);
+  msg_printf(msg_info, "Psi file %s written.\n", filename);
 }
